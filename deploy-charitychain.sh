@@ -37,7 +37,6 @@ echo "SECTION 1: CLEANUP AND DIRECTORY SETUP"
 echo "=================================================="
 
 echo "Performing thorough cleanup of previous deployment..."
-# Stop and remove containers by image and specific names to be more comprehensive
 docker stop $(docker ps -a -q --filter ancestor="$FABRIC_CA_IMAGE" --filter ancestor="$FABRIC_ORDERER_IMAGE" --filter ancestor="$FABRIC_PEER_IMAGE" --filter ancestor="$FABRIC_TOOLS_IMAGE" --filter name="ca-${CHARITY_ORG}" --filter name="ca-${DONOR_ORG}" --filter name="orderer.${ORDERER_DOMAIN}" --filter name="peer0-${CHARITY_ORG}" --filter name="peer0-${DONOR_ORG}" --filter name="cli") 2>/dev/null || true
 docker rm $(docker ps -a -q --filter ancestor="$FABRIC_CA_IMAGE" --filter ancestor="$FABRIC_ORDERER_IMAGE" --filter ancestor="$FABRIC_PEER_IMAGE" --filter ancestor="$FABRIC_TOOLS_IMAGE" --filter name="ca-${CHARITY_ORG}" --filter name="ca-${DONOR_ORG}" --filter name="orderer.${ORDERER_DOMAIN}" --filter name="peer0-${CHARITY_ORG}" --filter name="peer0-${DONOR_ORG}" --filter name="cli") 2>/dev/null || true
 
@@ -45,8 +44,6 @@ echo "Removing Docker networks..."
 docker network rm "$NETWORK_NAME" 2>/dev/null || true
 
 echo "Removing dangling Docker volumes (if any)..."
-# Be cautious with this command in shared Docker environments as it removes all dangling volumes.
-# For a dedicated dev environment, it's usually fine for a clean slate.
 docker volume rm $(docker volume ls -qf dangling=true) 2>/dev/null || true
 
 echo "Removing local deployment directories and files..."
@@ -60,7 +57,6 @@ if [ -d "$PROJECT_NAME" ]; then
 fi
 
 echo "Pulling Docker images (amd64 for ARM emulation if needed)..."
-# Added --platform linux/amd64 for ARM Macs if using older Fabric images not native to ARM
 docker pull --platform linux/amd64 "$FABRIC_CA_IMAGE" || true
 docker pull --platform linux/amd64 "$FABRIC_ORDERER_IMAGE" || true
 docker pull --platform linux/amd64 "$FABRIC_PEER_IMAGE" || true
@@ -68,7 +64,6 @@ docker pull --platform linux/amd64 "$FABRIC_TOOLS_IMAGE" || true
 
 echo "Creating directory structure: $PROJECT_NAME/..."
 mkdir -p "$PROJECT_NAME"/{organizations,configtx,docker,scripts,"chaincode/$CHAINCODE_NAME",channel-artifacts,system-genesis-block}
-# Create org-specific directories early
 mkdir -p "$PROJECT_NAME/organizations/${CHARITY_ORG}"
 mkdir -p "$PROJECT_NAME/organizations/${DONOR_ORG}"
 mkdir -p "$PROJECT_NAME/organizations/${ORDERER_ORG}"
@@ -93,7 +88,7 @@ class DonationContract extends Contract {
                 charityId: 'initialCharity',
                 timestamp: '2023-01-01T00:00:00Z',
                 nftId: 'nft0',
-                docType: 'donation' // Added docType for clarity
+                docType: 'donation' 
             }
         ];
 
@@ -111,8 +106,8 @@ class DonationContract extends Contract {
             amount,
             charityId,
             timestamp,
-            docType: 'donation', // Added docType
-            nftId: \`nft-\${donationId}\` // Simple NFT ID generation
+            docType: 'donation', 
+            nftId: \`nft-\${donationId}\` 
         };
         await ctx.stub.putState(donationId, Buffer.from(JSON.stringify(donation)));
 
@@ -125,7 +120,7 @@ class DonationContract extends Contract {
             charityId: charityId,
             timestamp: timestamp,
             description: \`A unique NFT representing a donation of \${amount} from \${donorId} to \${charityId}\`,
-            image: "https://example.com/nft_image.png" // Placeholder
+            image: "https://example.com/nft_image.png" 
         };
         await ctx.stub.putState(donation.nftId, Buffer.from(JSON.stringify(nftMetadata)));
 
@@ -190,6 +185,14 @@ class DonationContract extends Contract {
 module.exports = DonationContract;
 EOF
 
+cat <<EOF > "$PROJECT_NAME/chaincode/$CHAINCODE_NAME/index.js"
+'use strict';
+
+const DonationContract = require('./donationcc.js');
+
+module.exports.contracts = [DonationContract];
+EOF
+
 cat <<EOF > "$PROJECT_NAME/chaincode/$CHAINCODE_NAME/package.json"
 {
   "name": "donationcc",
@@ -197,17 +200,17 @@ cat <<EOF > "$PROJECT_NAME/chaincode/$CHAINCODE_NAME/package.json"
   "description": "Donation Chaincode for CharityChain Network",
   "main": "index.js",
   "engines": {
-    "node": ">=12",
-    "npm": ">=5"
+    "node": ">=16",
+    "npm": ">=8"
   },
   "scripts": {
-    "start": "fabric-chaincode-node start" 
+    "start": "fabric-chaincode-node start"
   },
   "author": "Your Name",
   "license": "ISC",
   "dependencies": {
-    "fabric-contract-api": "^2.2.0", 
-    "fabric-shim": "^2.2.0"
+    "fabric-contract-api": "~2.5.0",
+    "fabric-shim": "~2.5.0"
   }
 }
 EOF
@@ -304,7 +307,7 @@ Orderer: &OrdererDefaults
     <<: *OrdererCapabilities
 
 Application: &ApplicationDefaults
-  Organizations: # To be specified in profile
+  Organizations: 
   Policies:
     Readers:
       Type: ImplicitMeta
@@ -316,11 +319,11 @@ Application: &ApplicationDefaults
       Type: ImplicitMeta
       Rule: "MAJORITY Admins"
     LifecycleEndorsement:
-      Type: ImplicitMeta
-      Rule: "ANY Endorsement"
+      Type: Signature
+      Rule: "OR('charityOrgMSP.member', 'donorOrgMSP.member')"
     Endorsement:
-      Type: ImplicitMeta
-      Rule: "ANY Endorsement"
+      Type: Signature
+      Rule: "OR('charityOrgMSP.member', 'donorOrgMSP.member')"
   Capabilities:
     <<: *ApplicationCapabilities
 
@@ -365,7 +368,6 @@ Profiles:
 EOF
 
 echo "Creating docker-compose-orderer.yaml..."
-# Removed top-level 'version' attribute
 cat > "$PROJECT_NAME/docker/docker-compose-orderer.yaml" <<EOF
 networks:
   ${NETWORK_NAME}:
@@ -407,7 +409,6 @@ services:
 EOF
 
 echo "Creating docker-compose-peers.yaml..."
-# Removed top-level 'version' attribute
 cat > "$PROJECT_NAME/docker/docker-compose-peers.yaml" <<EOF
 version: '2.4' # Specifying a version that supports 'depends_on' and 'networks'
 networks:
@@ -595,26 +596,23 @@ services:
       - peer0-${DONOR_ORG}.${DONOR_DOMAIN}
 EOF
 
-# Removed top-level 'version' attribute
 cat > "$PROJECT_NAME/docker/docker-compose.yaml" <<EOF
 networks:
   ${NETWORK_NAME}:
     name: ${NETWORK_NAME}
 EOF
 
-## --- SECTION 3: HELPER FUNCTIONS ---
 echo "=================================================="
 echo "SECTION 3: HELPER FUNCTIONS"
 echo "=================================================="
 
-# Helper function to determine the directory segment (peers, orderers, users)
 _get_entity_path_segment() {
     local type=$1
     if [ "$type" == "peer" ]; then
         echo "peers"
     elif [ "$type" == "orderer" ]; then
         echo "orderers"
-    elif [ "$type" == "user" ] || [ "$type" == "admin" ]; then # Admin users also go into 'users' folder structure
+    elif [ "$type" == "user" ] || [ "$type" == "admin" ]; then 
         echo "users"
     else
         echo "Error: Unknown entity type '$type' for path segment generation." >&2
@@ -676,15 +674,10 @@ function register_enroll {
   echo "Enrolling ${IDENTITY_TYPE} ${IDENTITY_FULL_NAME} inside CA container..."
   local IDENTITY_MSP_DIR_IN_CA_TEMP="/tmp/${IDENTITY_FULL_NAME}-msp"
 
-  # --- THIS IS THE FIX ---
-  # For peers and orderers, specify the CSR hosts for their TLS certs.
-  # This embeds the correct hostnames (e.g., peer0-charityOrg.charity.example.com)
-  # into the certificate's Subject Alternative Name (SAN) field.
   local CSR_HOSTS_FLAG=""
   if [ "$IDENTITY_TYPE" == "peer" ] || [ "$IDENTITY_TYPE" == "orderer" ]; then
     CSR_HOSTS_FLAG="--csr.hosts ${IDENTITY_FULL_NAME}"
   fi
-  # --- END OF FIX ---
 
   docker exec \
     -e FABRIC_CA_CLIENT_HOME="$IDENTITY_MSP_DIR_IN_CA_TEMP" \
@@ -713,8 +706,6 @@ function register_enroll {
   docker exec "${CA_CONTAINER_TO_USE}" rm -rf "$IDENTITY_MSP_DIR_IN_CA_TEMP"
 }
 
-# Function to enroll the CA's bootstrap admin user (already registered by CA server on startup)
-# This is used to get the admin's MSP material onto the filesystem.
 function enroll_ca_admin {
   local ORG_NAME=$1
   local ORG_DOMAIN=$2
@@ -722,10 +713,9 @@ function enroll_ca_admin {
   local CA_ADMIN_PASS=$4
   local CA_PORT=$5
   local CA_CONTAINER_TO_USE=$6
-  local CONTAINER_CA_TLS_CERT_PATH=$7 # Path to the CA's TLS cert within the CA container
+  local CONTAINER_CA_TLS_CERT_PATH=$7 
 
   echo "Enrolling CA admin for ${ORG_NAME} from CA container ${CA_CONTAINER_TO_USE}..."
-  # Define the admin's MSP home path INSIDE the CA container
   local ADMIN_MSP_HOME_IN_CA="/etc/hyperledger/fabric/organizations/${ORG_NAME}/users/${CA_ADMIN_USER}@${ORG_DOMAIN}"
 
   docker exec \
@@ -737,13 +727,10 @@ function enroll_ca_admin {
     -M "$ADMIN_MSP_HOME_IN_CA/msp"
 
   echo "Renaming admin's private key inside CA container for ${ORG_NAME}..."
-  # Fabric CA client often names the private key with a hash. Rename it to key.pem for consistency.
-  # This command is executed *inside* the CA container.
   docker exec "${CA_CONTAINER_TO_USE}" /bin/bash -c \
     "mv \"$ADMIN_MSP_HOME_IN_CA/msp/keystore\"/* \"$ADMIN_MSP_HOME_IN_CA/msp/keystore/key.pem\""
 
   echo "Copying CA admin's MSP from CA container to host for ${ORG_NAME}..."
-  # Define the host path where the admin's MSP should reside
   local HOST_ADMIN_MSP_PATH="$PROJECT_NAME/organizations/${ORG_NAME}/users/${CA_ADMIN_USER}@${ORG_DOMAIN}/msp"
   mkdir -p "$HOST_ADMIN_MSP_PATH"
   docker cp "${CA_CONTAINER_TO_USE}:${ADMIN_MSP_HOME_IN_CA}/msp/." "$HOST_ADMIN_MSP_PATH"
@@ -761,30 +748,24 @@ create_msp_structure() {
     local domain=$2
     local ca_port_for_getcacert=$3
     local ca_container_name_for_getcacert=$4
-    local abs_project_path="$(pwd)/$PROJECT_NAME" # Absolute path to project
+    local abs_project_path="$(pwd)/$PROJECT_NAME" 
 
-    # Host paths for this organization's materials
     local host_org_base_dir="$abs_project_path/organizations/$org"
     local host_org_msp_dir="$host_org_base_dir/msp"
-    local host_org_ca_config_dir="$host_org_base_dir/ca" # Dir to store CA's own TLS cert (fetched for client use)
+    local host_org_ca_config_dir="$host_org_base_dir/ca" 
 
-    # --- CORRECTED LINE: Added 'signcerts' to the mkdir -p list ---
     mkdir -p "$host_org_msp_dir"/{admincerts,cacerts,tlscacerts,users,keystore,signcerts}
     mkdir -p "$host_org_ca_config_dir"
 
-    # Path to the CA server's own TLS certificate *inside the CA container*.
-    # This is typically 'ca-cert.pem' in the CA server's home directory.
     local container_path_to_ca_own_tls_cert="/etc/hyperledger/fabric-ca-server/ca-cert.pem"
-    # Where we will store this fetched cert on the host (for fabric-ca-client to use from host if needed)
     local host_storage_for_ca_tls_cert="$host_org_ca_config_dir/fetched-ca-tls-cert.pem"
 
     echo "Fetching CA's own TLS cert for $org from $ca_container_name_for_getcacert and saving to $host_storage_for_ca_tls_cert..." >&2
-    # Retry loop for fetching CA cert, as CA might take a moment to fully initialize and write its cert
     local attempts=0
     local max_attempts=5
     local success=false
     while [ $attempts -lt $max_attempts ] && [ "$success" = false ]; do
-        set +e # Allow cat to fail temporarily
+        set +e 
         docker exec "$ca_container_name_for_getcacert" cat "$container_path_to_ca_own_tls_cert" > "$host_storage_for_ca_tls_cert"
         if [ $? -eq 0 ] && [ -s "$host_storage_for_ca_tls_cert" ]; then
             success=true
@@ -802,24 +783,18 @@ create_msp_structure() {
 
 
     echo "Fetching CA root signing cert for $org's MSP and placing in cacerts and tlscacerts..." >&2
-    # Use fabric-ca-client (can be run from host if installed, or via tools container)
-    # Here, we run it locally, assuming fabric-ca-client is in PATH.
-    # It needs FABRIC_CA_CLIENT_HOME and the CA's TLS cert we just fetched.
     FABRIC_CA_CLIENT_HOME="$host_org_base_dir" fabric-ca-client getcacert \
         -u "https://localhost:$ca_port_for_getcacert" \
         --tls.certfiles "$host_storage_for_ca_tls_cert" \
-        -M "$host_org_msp_dir" # This command will output the CA's signing cert to $host_org_msp_dir/cacerts/
+        -M "$host_org_msp_dir" 
 
-    # The default filename from getcacert is based on the target URL (localhost-<port>.pem)
     local retrieved_ca_signing_cert_filename="localhost-${ca_port_for_getcacert}.pem"
     if [ ! -f "$host_org_msp_dir/cacerts/$retrieved_ca_signing_cert_filename" ]; then
         echo "Error: Failed to retrieve CA root signing cert for $org. File not found: $host_org_msp_dir/cacerts/$retrieved_ca_signing_cert_filename" >&2
-        ls -l "$host_org_msp_dir/cacerts/" # List contents for debugging
+        ls -l "$host_org_msp_dir/cacerts/" 
         exit 1
     fi
 
-    # Copy the CA's root signing cert to the tlscacerts directory as well, standard practice.
-    # Name it distinctively, e.g., tlsca.<domain>-cert.pem
     cp "$host_org_msp_dir/cacerts/$retrieved_ca_signing_cert_filename" \
        "$host_org_msp_dir/tlscacerts/tlsca.$domain-cert.pem"
 
@@ -840,12 +815,10 @@ NodeOUs:
     Certificate: cacerts/${retrieved_ca_signing_cert_filename}
     OrganizationalUnitIdentifier: orderer
 EOF
-    # This function now returns the path (inside the CA container) to the CA's own TLS certificate,
-    # which is needed by register_enroll and enroll_ca_admin when they run fabric-ca-client via `docker exec`.
+    
     echo "$container_path_to_ca_own_tls_cert"
 }
 
-# Function to register an affiliation with a CA
 register_affiliation() {
     local ca_container_to_target=$1
     local ca_port_to_target=$2
@@ -853,21 +826,18 @@ register_affiliation() {
     local affiliation_to_register=$4
     local admin_user_for_cmd=$5
     local admin_pass_for_cmd=$6
-    # --- ADD THIS ARGUMENT ---
-    local org_name_for_admin_path=$7 # e.g., charityOrg
+    local org_name_for_admin_path=$7 
 
     echo "Registering affiliation '$affiliation_to_register' with CA '$ca_container_to_target'..." >&2
 
-    # --- THIS IS THE FIX ---
-    # Use the correct path to the already-enrolled admin user's MSP
     local container_client_home_for_exec="/etc/hyperledger/fabric/organizations/${org_name_for_admin_path}/users/${admin_user_for_cmd}@${org_name_for_admin_path/Org/.example.com}/"
 
-    set +e # Temporarily disable exit on error, as affiliation might already exist
+    set +e 
     docker exec -e FABRIC_CA_CLIENT_HOME="${container_client_home_for_exec}" "$ca_container_to_target" \
         fabric-ca-client affiliation add "$affiliation_to_register" \
         --tls.certfiles "$path_to_ca_tls_cert_in_container"
     local exit_code=$?
-    set -e # Re-enable exit on error
+    set -e 
 
     if [ $exit_code -ne 0 ]; then
         echo "Warning: Adding affiliation '$affiliation_to_register' resulted in exit code $exit_code. It might already exist or another error occurred. Continuing." >&2
@@ -876,9 +846,6 @@ register_affiliation() {
     fi
 }
 
-## --- SECTION 4: NETWORK SETUP AND IDENTITY GENERATION ---
-
-## --- SECTION 4: NETWORK SETUP AND IDENTITY GENERATION ---
 
 ## --- SECTION 4: NETWORK SETUP AND IDENTITY GENERATION ---
 
@@ -896,26 +863,20 @@ echo "Waiting for CAs to start (increase if needed, currently 15s)..."
 sleep 15
 
 echo "Creating organization MSP structures and enrolling CA admin users..."
-# CharityOrg: Create MSP structure, get CA's internal TLS cert path, enroll CA admin
 
 CHARITY_CA_INTERNAL_TLS_CERT_PATH=$(create_msp_structure "$CHARITY_ORG" "$CHARITY_DOMAIN" 7054 "ca-${CHARITY_ORG}.${CHARITY_DOMAIN}")
 enroll_ca_admin "$CHARITY_ORG" "$CHARITY_DOMAIN" "$CA_ADMIN_USER" "$CA_ADMIN_PASS" 7054 "ca-${CHARITY_ORG}.${CHARITY_DOMAIN}" "$CHARITY_CA_INTERNAL_TLS_CERT_PATH"
 cp "$PROJECT_NAME/organizations/$CHARITY_ORG/users/$CA_ADMIN_USER@$CHARITY_DOMAIN/msp/signcerts"/* "$PROJECT_NAME/organizations/$CHARITY_ORG/msp/admincerts/"
 cp "$PROJECT_NAME/organizations/$CHARITY_ORG/msp/config.yaml" "$PROJECT_NAME/organizations/$CHARITY_ORG/users/$CA_ADMIN_USER@$CHARITY_DOMAIN/msp/"
-# --- CORRECTED PART ---
 cp -R "$PROJECT_NAME/organizations/$CHARITY_ORG/msp/cacerts/." "$PROJECT_NAME/organizations/$CHARITY_ORG/users/$CA_ADMIN_USER@$CHARITY_DOMAIN/msp/cacerts/"
 
 
-# DonorOrg: Create MSP structure, get CA's internal TLS cert path, enroll CA admin
 DONOR_CA_INTERNAL_TLS_CERT_PATH=$(create_msp_structure "$DONOR_ORG" "$DONOR_DOMAIN" 8054 "ca-${DONOR_ORG}.${DONOR_DOMAIN}")
 enroll_ca_admin "$DONOR_ORG" "$DONOR_DOMAIN" "$CA_ADMIN_USER" "$CA_ADMIN_PASS" 8054 "ca-${DONOR_ORG}.${DONOR_DOMAIN}" "$DONOR_CA_INTERNAL_TLS_CERT_PATH"
 cp "$PROJECT_NAME/organizations/$DONOR_ORG/users/$CA_ADMIN_USER@$DONOR_DOMAIN/msp/signcerts"/* "$PROJECT_NAME/organizations/$DONOR_ORG/msp/admincerts/"
 cp "$PROJECT_NAME/organizations/$DONOR_ORG/msp/config.yaml" "$PROJECT_NAME/organizations/$DONOR_ORG/users/$CA_ADMIN_USER@$DONOR_DOMAIN/msp/"
-# --- CORRECTED PART ---
 cp -R "$PROJECT_NAME/organizations/$DONOR_ORG/msp/cacerts/." "$PROJECT_NAME/organizations/$DONOR_ORG/users/$CA_ADMIN_USER@$DONOR_DOMAIN/msp/cacerts/"
 
-
-# OrdererOrg: Create MSP structure.
 ORDERER_ISSUING_CA_NAME="ca-${CHARITY_ORG}.${CHARITY_DOMAIN}"
 ORDERER_ISSUING_CA_PORT=7054
 ORDERER_ISSUING_CA_INTERNAL_TLS_CERT_PATH="$CHARITY_CA_INTERNAL_TLS_CERT_PATH"
@@ -935,37 +896,28 @@ register_affiliation "$ORDERER_ISSUING_CA_NAME" "$ORDERER_ISSUING_CA_PORT" "$ORD
 register_affiliation "$ORDERER_ISSUING_CA_NAME" "$ORDERER_ISSUING_CA_PORT" "$ORDERER_ISSUING_CA_INTERNAL_TLS_CERT_PATH" "$ORDERER_ORG.orderer" "$CA_ADMIN_USER" "$CA_ADMIN_PASS"
 echo "Registering and enrolling identities for nodes and users..."
 
-# Charity Org: peer0 and User1
 register_enroll "$CHARITY_ORG" "$CHARITY_DOMAIN" peer "peer0-${CHARITY_ORG}" "${CA_ADMIN_PASS}" 7054 "ca-${CHARITY_ORG}.${CHARITY_DOMAIN}" "$CHARITY_CA_INTERNAL_TLS_CERT_PATH" "hf.Registrar.Roles=peer"
 echo "Populating peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}'s local MSP with admin cert and config..."
 cp "$PROJECT_NAME/organizations/$CHARITY_ORG/msp/config.yaml" "$PROJECT_NAME/organizations/$CHARITY_ORG/peers/peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}/msp/"
-# Create the admincerts directory and copy the org's admin cert into it
 mkdir -p "$PROJECT_NAME/organizations/$CHARITY_ORG/peers/peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}/msp/admincerts"
 cp "$PROJECT_NAME/organizations/$CHARITY_ORG/users/Admin@$CHARITY_DOMAIN/msp/signcerts"/* "$PROJECT_NAME/organizations/$CHARITY_ORG/peers/peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}/msp/admincerts/"
 
 register_enroll "$CHARITY_ORG" "$CHARITY_DOMAIN" user "User1" "${CA_ADMIN_PASS}" 7054 "ca-${CHARITY_ORG}.${CHARITY_DOMAIN}" "$CHARITY_CA_INTERNAL_TLS_CERT_PATH" "hf.Registrar.Roles=client"
 cp "$PROJECT_NAME/organizations/$CHARITY_ORG/msp/config.yaml" "$PROJECT_NAME/organizations/$CHARITY_ORG/users/User1@$CHARITY_DOMAIN/msp/"
-# --- CORRECTED PART ---
 mkdir -p "$PROJECT_NAME/organizations/$CHARITY_ORG/users/User1@$CHARITY_DOMAIN/msp/cacerts"
 cp -R "$PROJECT_NAME/organizations/$CHARITY_ORG/msp/cacerts/." "$PROJECT_NAME/organizations/$CHARITY_ORG/users/User1@$CHARITY_DOMAIN/msp/cacerts/"
 
-
-# Donor Org: peer0 and User1
 register_enroll "$DONOR_ORG" "$DONOR_DOMAIN" peer "peer0-${DONOR_ORG}" "${CA_ADMIN_PASS}" 8054 "ca-${DONOR_ORG}.${DONOR_DOMAIN}" "$DONOR_CA_INTERNAL_TLS_CERT_PATH" "hf.Registrar.Roles=peer"
 echo "Populating peer0-${DONOR_ORG}.${DONOR_DOMAIN}'s local MSP with admin cert and config..."
 cp "$PROJECT_NAME/organizations/$DONOR_ORG/msp/config.yaml" "$PROJECT_NAME/organizations/$DONOR_ORG/peers/peer0-${DONOR_ORG}.${DONOR_DOMAIN}/msp/"
-# Create the admincerts directory and copy the org's admin cert into it
 mkdir -p "$PROJECT_NAME/organizations/$DONOR_ORG/peers/peer0-${DONOR_ORG}.${DONOR_DOMAIN}/msp/admincerts"
 cp "$PROJECT_NAME/organizations/$DONOR_ORG/users/Admin@$DONOR_DOMAIN/msp/signcerts"/* "$PROJECT_NAME/organizations/$DONOR_ORG/peers/peer0-${DONOR_ORG}.${DONOR_DOMAIN}/msp/admincerts/"
 
 register_enroll "$DONOR_ORG" "$DONOR_DOMAIN" user "User1" "${CA_ADMIN_PASS}" 8054 "ca-${DONOR_ORG}.${DONOR_DOMAIN}" "$DONOR_CA_INTERNAL_TLS_CERT_PATH" "hf.Registrar.Roles=client"
 cp "$PROJECT_NAME/organizations/$DONOR_ORG/msp/config.yaml" "$PROJECT_NAME/organizations/$DONOR_ORG/users/User1@$DONOR_DOMAIN/msp/"
-# --- CORRECTED PART ---
 mkdir -p "$PROJECT_NAME/organizations/$DONOR_ORG/users/User1@$DONOR_DOMAIN/msp/cacerts"
 cp -R "$PROJECT_NAME/organizations/$DONOR_ORG/msp/cacerts/." "$PROJECT_NAME/organizations/$DONOR_ORG/users/User1@$DONOR_DOMAIN/msp/cacerts/"
 
-
-# Orderer Org: orderer node (issued by CharityOrg CA)
 register_enroll "$ORDERER_ORG" "$ORDERER_DOMAIN" orderer "orderer" \
   "${CA_ADMIN_PASS}" "$ORDERER_ISSUING_CA_PORT" "$ORDERER_ISSUING_CA_NAME" \
   "$ORDERER_ISSUING_CA_INTERNAL_TLS_CERT_PATH" \
@@ -974,10 +926,8 @@ register_enroll "$ORDERER_ORG" "$ORDERER_DOMAIN" orderer "orderer" \
 
 echo "Populating orderer.${ORDERER_DOMAIN}'s local MSP with admin cert and config..."
 cp "$PROJECT_NAME/organizations/$ORDERER_ORG/msp/config.yaml" "$PROJECT_NAME/organizations/$ORDERER_ORG/orderers/orderer.$ORDERER_DOMAIN/msp/"
-# Create the admincerts directory and copy the issuing org's admin cert into it
 mkdir -p "$PROJECT_NAME/organizations/$ORDERER_ORG/orderers/orderer.$ORDERER_DOMAIN/msp/admincerts"
 cp "$PROJECT_NAME/organizations/$CHARITY_ORG/users/$CA_ADMIN_USER@$CHARITY_DOMAIN/msp/signcerts"/* "$PROJECT_NAME/organizations/$ORDERER_ORG/orderers/orderer.$ORDERER_DOMAIN/msp/admincerts/"
-# Populate OrdererOrg's main MSP and TLS directories for the orderer container
 echo "Populating OrdererOrg's main MSP and TLS directories from enrolled orderer identity..."
 
 ORDERER_NODE_CRYPTO_BASE_PATH="$PROJECT_NAME/organizations/$ORDERER_ORG/orderers/orderer.$ORDERER_DOMAIN"
@@ -1003,7 +953,6 @@ echo "Generating anchor peer update transactions..."
 configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate "$PROJECT_NAME/channel-artifacts/${CHARITY_ORG}Anchor.tx" -channelID "$CHANNEL_NAME" -asOrg "$CHARITY_ORG"
 configtxgen -profile TwoOrgsChannel -outputAnchorPeersUpdate "$PROJECT_NAME/channel-artifacts/${DONOR_ORG}Anchor.tx" -channelID "$CHANNEL_NAME" -asOrg "$DONOR_ORG"
 
-# The orderer, peers, and CLI are brought up after config generation as they need the crypto material.
 echo "Starting orderer, peer, and CLI containers..."
 docker compose -f "$PROJECT_NAME/docker/docker-compose-orderer.yaml" up -d
 docker compose -f "$PROJECT_NAME/docker/docker-compose-peers.yaml" up -d peer0-${CHARITY_ORG}.${CHARITY_DOMAIN} peer0-${DONOR_ORG}.${DONOR_DOMAIN} cli
@@ -1017,18 +966,14 @@ register_affiliation "ca-${DONOR_ORG}.${DONOR_DOMAIN}" 8054 "$DONOR_CA_INTERNAL_
 echo "Waiting for network components to initialize (currently 20s)..."
 sleep 20
 
-
-
 ## --- SECTION 5: CHANNEL OPERATIONS ---
 echo "=================================================="
 echo "SECTION 5: CHANNEL OPERATIONS"
 echo "=================================================="
 
-# Path to the Orderer's TLS CA certificate inside the CLI container
 ORDERER_CA_PATH_IN_CLI="/opt/hyperledger/fabric/crypto/${ORDERER_ORG}/tls/ca.crt"
 
 echo "Creating channel '${CHANNEL_NAME}'..."
-# Use Admin's MSP for channel creation, as it requires admin privileges.
 docker exec \
   -e CORE_PEER_LOCALMSPID="${CHARITY_ORG}MSP" \
   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/${CHARITY_ORG}/users/Admin@${CHARITY_DOMAIN}/msp" \
@@ -1041,7 +986,6 @@ docker exec \
   --cafile "$ORDERER_CA_PATH_IN_CLI"
 
 echo "Joining CharityOrg peer (peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}) to channel '${CHANNEL_NAME}'..."
-# Switch CLI to CharityOrg Admin for joining peer
 docker exec \
   -e CORE_PEER_LOCALMSPID="${CHARITY_ORG}MSP" \
   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/${CHARITY_ORG}/users/Admin@${CHARITY_DOMAIN}/msp" \
@@ -1050,7 +994,6 @@ docker exec \
   cli peer channel join -b "/opt/hyperledger/fabric/channel-artifacts/${CHANNEL_NAME}.block"
 
 echo "Joining DonorOrg peer (peer0-${DONOR_ORG}.${DONOR_DOMAIN}) to channel '${CHANNEL_NAME}'..."
-# Temporarily override CLI environment variables to act as DonorOrg Admin
 docker exec \
   -e CORE_PEER_LOCALMSPID="${DONOR_ORG}MSP" \
   -e CORE_PEER_ADDRESS="peer0-${DONOR_ORG}.${DONOR_DOMAIN}:9051" \
@@ -1059,7 +1002,6 @@ docker exec \
   cli peer channel join -b "/opt/hyperledger/fabric/channel-artifacts/${CHANNEL_NAME}.block"
 
 echo "Updating anchor peers for CharityOrg on channel '${CHANNEL_NAME}'..."
-# CLI's default context is CharityOrg Admin
 docker exec \
   -e CORE_PEER_LOCALMSPID="${CHARITY_ORG}MSP" \
   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/${CHARITY_ORG}/users/Admin@${CHARITY_DOMAIN}/msp" \
@@ -1086,19 +1028,16 @@ docker exec \
   --cafile "$ORDERER_CA_PATH_IN_CLI"
   
 
-  
-# Define paths to orderer and peer TLS CA certs inside CLI for convenience
 ORDERER_CA_PATH_IN_CLI="/opt/hyperledger/fabric/crypto/${ORDERER_ORG}/orderers/orderer.${ORDERER_DOMAIN}/tls/ca.crt"
 CHARITY_PEER_TLS_CA_PATH_IN_CLI="/opt/hyperledger/fabric/crypto/${CHARITY_ORG}/peers/peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}/tls/ca.crt"
 DONOR_PEER_TLS_CA_PATH_IN_CLI="/opt/hyperledger/fabric/crypto/${DONOR_ORG}/peers/peer0-${DONOR_ORG}.${DONOR_DOMAIN}/tls/ca.crt"
 
 
-# --- Helper function to check if chaincode is already installed ---
 check_chaincode_installed() {
     local PEER_ADDRESS=$1
     local TLS_ROOT_CERT_FILE=$2
-    local ORG_MSP_ID=$3       # Optional: only for DonorOrg
-    local ADMIN_MSP_PATH=$4   # Optional: only for DonorOrg
+    local ORG_MSP_ID=$3       
+    local ADMIN_MSP_PATH=$4   
 
     echo "Checking if chaincode '${CHAINCODE_NAME}_${CHAINCODE_VERSION}' is installed on ${PEER_ADDRESS}..."
 
@@ -1111,277 +1050,15 @@ check_chaincode_installed() {
             -e CORE_PEER_TLS_ROOTCERT_FILE="$TLS_ROOT_CERT_FILE" \
             cli peer lifecycle chaincode queryinstalled --peerAddresses "$PEER_ADDRESS" --tlsRootCertFiles "$TLS_ROOT_CERT_FILE" 2>&1)
     else
-        # Default CLI context for CharityOrg
         installed_output=$(docker exec cli peer lifecycle chaincode queryinstalled --peerAddresses "$PEER_ADDRESS" --tlsRootCertFiles "$TLS_ROOT_CERT_FILE" 2>&1)
     fi
 
-    # Check for the specific label in the output
     echo "$installed_output" | grep -q "Label: ${CHAINCODE_NAME}_${CHAINCODE_VERSION}"
     if [ $? -eq 0 ]; then
         echo "Chaincode '${CHAINCODE_NAME}_${CHAINCODE_VERSION}' is already installed on ${PEER_ADDRESS}. Skipping installation."
-        return 0 # Installed
+        return 0 
     else
         echo "Chaincode '${CHAINCODE_NAME}_${CHAINCODE_VERSION}' is NOT installed on ${PEER_ADDRESS}."
-        return 1 # Not installed
+        return 1 
     fi
 }
-# --- End of Helper function ---
-
-
-# echo "=================================================="
-# echo "SECTION 6: CHAINCODE DEPLOYMENT"
-# echo "=================================================="
-
-# echo "Packaging chaincode '${CHAINCODE_NAME}'..."
-# # Chaincode is mounted at /opt/gopath/src/chaincode in CLI container
-# docker exec cli peer lifecycle chaincode package "${CHAINCODE_NAME}.tar.gz" \
-#   --path "/opt/gopath/src/chaincode/${CHAINCODE_NAME}" \
-#   --lang "$CHAINCODE_LANG" \
-#   --label "${CHAINCODE_NAME}_${CHAINCODE_VERSION}"
-
-# echo "Installing chaincode on CharityOrg peer (peer0-${CHARITY_ORG}.${CHARITY_DOMAIN})..."
-# # Check if chaincode is already installed on CharityOrg peer
-# if ! check_chaincode_installed "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" "$CHARITY_PEER_TLS_CA_PATH_IN_CLI"; then
-#     docker exec cli peer lifecycle chaincode install "${CHAINCODE_NAME}.tar.gz"
-# fi
-
-# echo "Installing chaincode on DonorOrg peer (peer0-${DONOR_ORG}.${DONOR_DOMAIN})..."
-# # Check if chaincode is already installed on DonorOrg peer
-# if ! check_chaincode_installed "peer0-${DONOR_ORG}.${DONOR_DOMAIN}:9051" "$DONOR_PEER_TLS_CA_PATH_IN_CLI" "${DONOR_ORG}MSP" "/opt/hyperledger/fabric/crypto/${DONOR_ORG}/users/Admin@${DONOR_DOMAIN}/msp"; then
-#     docker exec \
-#       -e CORE_PEER_LOCALMSPID="${DONOR_ORG}MSP" \
-#       -e CORE_PEER_ADDRESS="peer0-${DONOR_ORG}.${DONOR_DOMAIN}:9051" \
-#       -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/${DONOR_ORG}/users/Admin@${DONOR_DOMAIN}/msp" \
-#       -e CORE_PEER_TLS_ROOTCERT_FILE="$DONOR_PEER_TLS_CA_PATH_IN_CLI" \
-#       cli peer lifecycle chaincode install "${CHAINCODE_NAME}.tar.gz"
-# fi
-
-# echo "Querying installed chaincode on CharityOrg peer to get package ID..."
-# CC_PACKAGE_ID=""
-# MAX_QUERY_ATTEMPTS=10
-# CURRENT_ATTEMPT=0
-# while [ -z "$CC_PACKAGE_ID" ] && [ "$CURRENT_ATTEMPT" -lt "$MAX_QUERY_ATTEMPTS" ]; do
-#     CURRENT_ATTEMPT=$((CURRENT_ATTEMPT+1))
-#     sleep 3 # Wait for install to propagate or peer to be ready
-#     echo "Attempt $CURRENT_ATTEMPT/$MAX_QUERY_ATTEMPTS: Querying installed on peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}..." >&2
-#     set +e # Allow grep to fail without exiting script
-#     # Using default CLI context (CharityOrg)
-#     # MODIFIED: More robust package ID extraction
-#     CC_PACKAGE_ID=$(docker exec cli peer lifecycle chaincode queryinstalled \
-#         --peerAddresses "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" \
-#         --tlsRootCertFiles "$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
-#         2>&1 | grep "Package ID:" | head -n 1 | awk -F': ' '{print $2}' | awk -F',' '{print $1}')
-#     set -e
-#     echo "Query attempt $CURRENT_ATTEMPT: Package ID found: '$CC_PACKAGE_ID'" >&2
-# done
-
-# if [ -z "$CC_PACKAGE_ID" ]; then
-#     echo "Error: Could not retrieve chaincode package ID from CharityOrg peer after $MAX_QUERY_ATTEMPTS attempts." >&2
-#     echo "Output of last queryinstalled:" >&2
-#     docker exec cli peer lifecycle chaincode queryinstalled --peerAddresses "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" --tlsRootCertFiles "$CHARITY_PEER_TLS_CA_PATH_IN_CLI" >&2
-#     exit 1
-# fi
-# echo "Chaincode package ID: $CC_PACKAGE_ID"
-
-# echo "Approving chaincode definition for CharityOrg..."
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="charityOrgMSP" \
-#   -e CORE_PEER_ADDRESS="peer0-charityOrg.charity.example.com:7051" \
-#   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/charityOrg/users/Admin@charity.example.com/msp" \
-#   -e CORE_PEER_TLS_ROOTCERT_FILE="$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
-#   cli peer lifecycle chaincode approveformyorg \
-#   -o "orderer.${ORDERER_DOMAIN}:7050" \
-#   --tls --cafile "$ORDERER_CA_PATH_IN_CLI" \
-#   --channelID "$CHANNEL_NAME" \
-#   --name "$CHAINCODE_NAME" \
-#   --version "$CHAINCODE_VERSION" \
-#   --package-id "$CC_PACKAGE_ID" \
-#   --sequence "$CHAINCODE_SEQUENCE" \
-#   --init-required \
-#   --signature-policy "AND('charityOrgMSP.peer','donorOrgMSP.peer')"
-
-# echo "Approving chaincode definition for DonorOrg..."
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="donorOrgMSP" \
-#   -e CORE_PEER_ADDRESS="peer0-donorOrg.donor.example.com:9051" \
-#   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/donorOrg/users/Admin@donor.example.com/msp" \
-#   -e CORE_PEER_TLS_ROOTCERT_FILE="$DONOR_PEER_TLS_CA_PATH_IN_CLI" \
-#   cli peer lifecycle chaincode approveformyorg \
-#   -o "orderer.${ORDERER_DOMAIN}:7050" \
-#   --tls --cafile "$ORDERER_CA_PATH_IN_CLI" \
-#   --channelID "$CHANNEL_NAME" \
-#   --name "$CHAINCODE_NAME" \
-#   --version "$CHAINCODE_VERSION" \
-#   --package-id "$CC_PACKAGE_ID" \
-#   --sequence "$CHAINCODE_SEQUENCE" \
-#   --init-required \
-#   --signature-policy "AND('charityOrgMSP.peer','donorOrgMSP.peer')"
-
-# echo "Verifying approval for CharityOrg..."
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="charityOrgMSP" \
-#   -e CORE_PEER_ADDRESS="peer0-charityOrg.charity.example.com:7051" \
-#   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/charityOrg/users/Admin@charity.example.com/msp" \
-#   -e CORE_PEER_TLS_ROOTCERT_FILE="$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
-#   cli peer lifecycle chaincode queryapproved \
-#   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME"
-
-# echo "Verifying approval for DonorOrg..."
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="donorOrgMSP" \
-#   -e CORE_PEER_ADDRESS="peer0-donorOrg.donor.example.com:9051" \
-#   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/donorOrg/users/Admin@donor.example.com/msp" \
-#   cli peer lifecycle chaincode queryapproved \
-#   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" \
-#   --peerAddresses "peer0-donorOrg.donor.example.com:9051" \
-#   --tlsRootCertFiles "$DONOR_PEER_TLS_CA_PATH_IN_CLI"
-
-
-# echo "Waiting for approvals to propagate before checking commit readiness (5s)..."
-# sleep 15 # ADDED SLEEP
-
-# # =================================================================================
-# # --- CORRECTED LIFECYCLE SECTION (REPLACE THE OLD ONE WITH THIS) ---
-# # =================================================================================
-
-# echo "Waiting for approvals to propagate before checking commit readiness (5s)..."
-# sleep 5
-
-# echo "Checking commit readiness for chaincode '${CHAINCODE_NAME}' on channel '${CHANNEL_NAME}'..."
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="charityOrgMSP" \
-#   -e CORE_PEER_ADDRESS="peer0-charityOrg.charity.example.com:7051" \
-#   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/charityOrg/users/Admin@charity.example.com/msp" \
-#   -e CORE_PEER_TLS_ROOTCERT_FILE="$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
-#   cli peer lifecycle chaincode checkcommitreadiness \
-#   --channelID "$CHANNEL_NAME" \
-#   --name "$CHAINCODE_NAME" \
-#   --version "$CHAINCODE_VERSION" \
-#   --sequence "$CHAINCODE_SEQUENCE" \
-#   --init-required \
-#   --output json \
-#   --signature-policy "AND('charityOrgMSP.peer','donorOrgMSP.peer')" # <-- FIX: Added signature policy to match what was approved.
-
-# # For CharityOrg
-# docker exec cli peer lifecycle chaincode queryapproved \
-#   -C $CHANNEL_NAME -n $CHAINCODE_NAME \
-#   --peerAddresses peer0-charityOrg.charity.example.com:7051 \
-#   --tlsRootCertFiles $CHARITY_PEER_TLS_CA_PATH_IN_CLI \
-#   --output json
-
-# # For DonorOrg
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="donorOrgMSP" \
-#   -e CORE_PEER_ADDRESS="peer0-donorOrg.donor.example.com:9051" \
-#   cli peer lifecycle chaincode queryapproved \
-#   -C $CHANNEL_NAME -n $CHAINCODE_NAME \
-#   --output json
-
-# # For CharityOrg
-# docker exec cli peer lifecycle chaincode approveformyorg \
-#   -o orderer.orderer.example.com:7050 \
-#   --tls --cafile $ORDERER_CA_PATH_IN_CLI \
-#   --channelID $CHANNEL_NAME \
-#   --name $CHAINCODE_NAME \
-#   --version $CHAINCODE_VERSION \
-#   --package-id donationcc_1.0:81c49195b543055bf1bdab8a7c7516bec094543ebb9303ddb61e19c18608f908 \
-#   --sequence $CHAINCODE_SEQUENCE \
-#   --init-required \
-#   --signature-policy "AND('charityOrgMSP.peer','donorOrgMSP.peer')"
-
-# # For DonorOrg
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="donorOrgMSP" \
-#   -e CORE_PEER_ADDRESS="peer0-donorOrg.donor.example.com:9051" \
-#   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/donorOrg/users/Admin@donor.example.com/msp" \
-#   cli peer lifecycle chaincode approveformyorg \
-#   -o orderer.orderer.example.com:7050 \
-#   --tls --cafile $ORDERER_CA_PATH_IN_CLI \
-#   --channelID $CHANNEL_NAME \
-#   --name $CHAINCODE_NAME \
-#   --version $CHAINCODE_VERSION \
-#   --package-id donationcc_1.0:81c49195b543055bf1bdab8a7c7516bec094543ebb9303ddb61e19c18608f908 \
-#   --sequence $CHAINCODE_SEQUENCE \
-#   --init-required \
-#   --signature-policy "AND('charityOrgMSP.peer','donorOrgMSP.peer')"
-
-
-# echo "Committing chaincode definition with full endorsement..."
-# # Using CharityOrg context but specifying both peers
-# docker exec \
-#   -e CORE_PEER_LOCALMSPID="charityOrgMSP" \
-#   -e CORE_PEER_MSPCONFIGPATH="/opt/hyperledger/fabric/crypto/charityOrg/users/Admin@charity.example.com/msp" \
-#   cli peer lifecycle chaincode commit \
-#   -o orderer.orderer.example.com:7050 \
-#   --tls --cafile $ORDERER_CA_PATH_IN_CLI \
-#   --channelID $CHANNEL_NAME \
-#   --name $CHAINCODE_NAME \
-#   --version $CHAINCODE_VERSION \
-#   --sequence $CHAINCODE_SEQUENCE \
-#   --init-required \
-#   --peerAddresses peer0-charityOrg.charity.example.com:7051 \
-#   --tlsRootCertFiles $CHARITY_PEER_TLS_CA_PATH_IN_CLI \
-#   --peerAddresses peer0-donorOrg.donor.example.com:9051 \
-#   --tlsRootCertFiles $DONOR_PEER_TLS_CA_PATH_IN_CLI \
-#   --waitForEvent
-
-# echo "Querying committed chaincode definition on channel '${CHANNEL_NAME}'..."
-# # Query from one of the peers, e.g., CharityOrg's peer
-# docker exec cli peer lifecycle chaincode querycommitted \
-#   --channelID "$CHANNEL_NAME" --name "$CHAINCODE_NAME" \
-#   --peerAddresses "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" --tlsRootCertFiles "$CHARITY_PEER_TLS_CA_PATH_IN_CLI"
-
-# echo "Initializing chaincode (calling 'InitLedger')..."
-# # Invoke InitLedger. Ensure --isInit is used.
-# docker exec cli peer chaincode invoke \
-#   -o "orderer.${ORDERER_DOMAIN}:7050" \
-#   --tls --cafile "$ORDERER_CA_PATH_IN_CLI" \
-#   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" \
-#   --isInit \
-#   -c '{"Args":["InitLedger"]}' \
-#   --peerAddresses "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" --tlsRootCertFiles "$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
-#   --peerAddresses "peer0-${DONOR_ORG}.${DONOR_DOMAIN}:9051" --tlsRootCertFiles "$DONOR_PEER_TLS_CA_PATH_IN_CLI" \
-#   --waitForEvent # Optional: wait for the transaction to be committed
-
-# echo "Waiting for chaincode initialization transaction to complete (5s)..."
-# sleep 5
-
-# ## --- SECTION 7: TESTING CHAINCODE ---
-# echo "=================================================="
-# echo "SECTION 7: TESTING CHAINCODE"
-# echo "=================================================="
-
-# echo "Querying all donations (should show initial ledger entry from InitLedger)..."
-# docker exec cli peer chaincode query \
-#   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c '{"Args":["getAllDonations"]}'
-
-# echo "Creating a new donation: 'donation1'..."
-# docker exec cli peer chaincode invoke \
-#   -o "orderer.${ORDERER_DOMAIN}:7050" \
-#   --tls --cafile "$ORDERER_CA_PATH_IN_CLI" \
-#   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" \
-#   -c '{"Args":["createDonation","donation1","donorA","100","charityX","2024-01-01T10:00:00Z"]}' \
-#   --peerAddresses "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" --tlsRootCertFiles "$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
-#   --peerAddresses "peer0-${DONOR_ORG}.${DONOR_DOMAIN}:9051" --tlsRootCertFiles "$DONOR_PEER_TLS_CA_PATH_IN_CLI" \
-#   --waitForEvent
-
-# echo "Waiting for 'createDonation' invoke to complete (3s)..."
-# sleep 3
-
-# echo "Querying 'donation1'..."
-# docker exec cli peer chaincode query \
-#   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c '{"Args":["queryDonation","donation1"]}'
-
-# echo "Querying all NFTs..."
-# docker exec cli peer chaincode query \
-#   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c '{"Args":["getAllNFTs"]}'
-
-# echo "=================================================="
-# echo "CharityChain network deployment and basic test complete!"
-# echo "You can interact with the network using the 'cli' container:"
-# echo "  docker exec -it cli bash"
-# echo "To view logs of a specific container (e.g., orderer):"
-# echo "  docker logs -f orderer.${ORDERER_DOMAIN}"
-# echo "To view logs of CharityOrg peer:"
-# echo "  docker logs -f peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}"
-# echo "=================================================="
