@@ -51,14 +51,24 @@ DONOR_PEER_TLS_CA_PATH_IN_CLI="/opt/hyperledger/fabric/crypto/${DONOR_ORG}/peers
 #     fi
 
 #     echo "$installed_output" | grep -q "Label: ${CHAINCODE_NAME}_${CHAINCODE_VERSION}"
-#     if [ $? -eq 0 ]; then
-#         echo "Chaincode '${CHAINCODE_NAME}_${CHAINCODE_VERSION}' is already installed on ${PEER_ADDRESS}. Skipping installation."
-#         return 0 
+# }
+
+# # --- Helper function to verify a donation query ---
+# verify_donation() {
+#     local DONATION_ID=$1
+#     echo "Verifying donation '$DONATION_ID' by querying..."
+#     QUERY_RESULT=$(docker exec cli peer chaincode query \
+#       -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c "{\"Args\":[\"queryDonation\",\"$DONATION_ID\"]}")
+    
+#     if echo "$QUERY_RESULT" | grep -q "\"donationId\":\"$DONATION_ID\""; then
+#         echo "Donation '$DONATION_ID' successfully queried and found."
 #     else
-#         echo "Chaincode '${CHAINCODE_NAME}_${CHAINCODE_VERSION}' is NOT installed on ${PEER_ADDRESS}."
-#         return 1 
+#         echo "Error: Donation '$DONATION_ID' not found or query failed."
+#         echo "Query Result: $QUERY_RESULT"
+#         exit 1
 #     fi
 # }
+
 
 # echo "=================================================="
 # echo "SECTION 6: CHAINCODE DEPLOYMENT"
@@ -169,29 +179,67 @@ echo "=================================================="
 echo "SECTION 7: TESTING CHAINCODE"
 echo "=================================================="
 
-echo "Querying all donations (should show initial ledger entry)..."
+# Query all donations initially (should show only initLedger entry)
+echo "Querying all donations (should show initial ledger entry 'donation0')..."
 docker exec cli peer chaincode query \
   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c '{"Args":["getAllDonations"]}'
 
-echo "Creating a new donation: 'donation1'..."
-docker exec cli peer chaincode invoke \
-  -o "orderer.${ORDERER_DOMAIN}:7050" --tls --cafile "$ORDERER_CA_PATH_IN_CLI" \
+echo "Waiting for initial query to settle (2s)..."
+sleep 2
+
+# Define a set of donations to create using an indexed array (more compatible)
+DONATIONS=(
+    '{"Args":["createDonation","donation1","donorA","100","charityX","2024-01-01T10:00:00Z"]}'
+    # '{"Args":["createDonation","donation2","donorB","250","charityY","2024-01-02T11:00:00Z"]}'
+    # '{"Args":["createDonation","donation3","donorC","500","charityZ","2024-01-03T12:00:00Z"]}'
+    # '{"Args":["createDonation","donation4","donorA","75","charityX","2024-01-04T13:00:00Z"]}'
+    # '{"Args":["createDonation","donation5","donorB","150","charityY","2024-01-05T14:00:00Z"]}'
+    # '{"Args":["createDonation","donation6","donorC","300","charityZ","2024-01-06T15:00:00Z"]}'
+    # '{"Args":["createDonation","donation7","donorA","120","charityX","2024-01-07T16:00:00Z"]}'
+    # '{"Args":["createDonation","donation8","donorB","400","charityY","2024-01-08T17:00:00Z"]}'
+    # '{"Args":["createDonation","donation9","donorC","600","charityZ","2024-01-09T18:00:00Z"]}'
+)
+
+# Process all donations
+for DONATION_JSON in "${DONATIONS[@]}"; do
+    # Extract donationId for logging and verification using awk (more compatible than grep -P)
+    # This extracts the second argument from the "Args" array in the JSON string
+    DONATION_ID=$(echo "$DONATION_JSON" | awk -F'\"' '{print $6}')
+
+    echo "--------------------------------------------------"
+    echo "Creating donation '$DONATION_ID'..."
+    
+    # Capture and display transaction result
+    TX_RESULT=$(docker exec cli peer chaincode invoke \
+      -o "orderer.${ORDERER_DOMAIN}:7050" --tls --cafile "$ORDERER_CA_PATH_IN_CLI" \
+      -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" \
+      -c "$DONATION_JSON" \
+      --peerAddresses "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" --tlsRootCertFiles "$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
+      --peerAddresses "peer0-${DONOR_ORG}.${DONOR_DOMAIN}:9051" --tlsRootCertFiles "$DONOR_PEER_TLS_CA_PATH_IN_CLI" \
+      --waitForEvent)
+    
+    echo "Transaction result:"
+    echo "$TX_RESULT"
+    
+    # Verify the donation was committed
+    verify_donation "$DONATION_ID"
+    
+    # Small delay between transactions
+    sleep 2
+done
+
+echo "--------------------------------------------------"
+echo "Final ledger state:"
+ALL_DONATIONS=$(docker exec cli peer chaincode query \
   -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" \
-  -c '{"Args":["createDonation","donation1","donorA","100","charityX","2024-01-01T10:00:00Z"]}' \
-  --peerAddresses "peer0-${CHARITY_ORG}.${CHARITY_DOMAIN}:7051" --tlsRootCertFiles "$CHARITY_PEER_TLS_CA_PATH_IN_CLI" \
-  --peerAddresses "peer0-${DONOR_ORG}.${DONOR_DOMAIN}:9051" --tlsRootCertFiles "$DONOR_PEER_TLS_CA_PATH_IN_CLI" \
-  --waitForEvent
+  -c '{"Args":["getAllDonations"]}')
+echo "All Donations:\n$ALL_DONATIONS"
 
-echo "Waiting for 'createDonation' invoke to complete (3s)..."
-sleep 3
-
-echo "Querying 'donation1'..."
-docker exec cli peer chaincode query \
-  -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c '{"Args":["queryDonation","donation1"]}'
-
-echo "Querying all NFTs..."
-docker exec cli peer chaincode query \
-  -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c '{"Args":["getAllNFTs"]}'
+echo "All NFTs:"
+ALL_NFTS=$(docker exec cli peer chaincode query \
+  -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" \
+  -c '{"Args":["getAllNFTs"]}')
+echo "All NFTs:\n$ALL_NFTS"
 
 echo "=================================================="
 echo "CharityChain network deployment and basic test complete!"

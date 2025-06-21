@@ -199,13 +199,20 @@ All API endpoints will return JSON responses.
 curl -X POST http://localhost:4000/network/deploy
 
 curl -X POST -H "Content-Type: application/json" -d '{
-    "donationId": "apiDonation1",
-    "donorId": "apiDonor1",
-    "amount": "123",
-    "charityId": "apiCharity1",
-    "timestamp": "2024-06-19T10:00:00Z"
+    "donationId": "apiDonation2",
+    "donorId": "apiDonor2",
+    "amount": "12000",
+    "charityId": "apiCharity2",
+    "timestamp": "2024-07-19T10:00:00Z"
 }' http://localhost:4000/donations
 
 curl http://localhost:4000/donations
 
 curl http://localhost:4000/nfts
+
+
+
+# To check the Identity Authentication
+## X.509 certificate validation for actions
+
+command is : > openssl x509 -in /Users/sushildube/Desktop/Fiverr/Fabric-NFT-Crowdfunding/CharityChain-Network/organizations/charityOrg/msp/tlscacerts/tlsca.charity.example.com-cert.pem -noout -text
