@@ -63,7 +63,17 @@ app.post('/donations', async (req, res) => {
     try {
         console.log(`API: Creating donation: ${donationId}`);
         const result = await fabricService.createDonation(donationId, donorId, amount, charityId, timestamp);
-        res.status(200).send({ message: 'Donation created successfully', data: result });
+        let responseData;
+        try {
+            // Attempt to parse the string result into a JSON object.
+            responseData = JSON.parse(result);
+        } catch (e) {
+            // If parsing fails, it might be a simple string message (e.g., "OK").
+            // In that case, we'll just send the raw string.
+            console.warn('The chaincode response was not a valid JSON string. Returning raw response.');
+            responseData = result;
+        }
+        res.status(200).send({ message: 'Donation created successfully', responseData });
     } catch (error: any) {
         console.error(`API: Error creating donation: ${error.message}`);
         res.status(500).send({ error: `Failed to create donation: ${error.message}` });

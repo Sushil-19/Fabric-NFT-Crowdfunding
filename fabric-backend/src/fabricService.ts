@@ -11,9 +11,9 @@ export class FabricService {
     private readonly CHANNEL_NAME = "donationchannel";
     private readonly ORDERER_DOMAIN = "orderer.example.com";
     private readonly CHARITY_ORG = "charityOrg";
-    private readonly CHARITY_DOMAIN = "charity.example.com"; // Added this
+    private readonly CHARITY_DOMAIN = "charity.example.com";
     private readonly DONOR_ORG = "donorOrg";
-    private readonly DONOR_DOMAIN = "donor.example.com";     // Added this
+    private readonly DONOR_DOMAIN = "donor.example.com";
 
     // Define paths to orderer and peer TLS CA certs inside CLI for convenience
     private readonly ORDERER_CA_PATH_IN_CLI = `/opt/hyperledger/fabric/crypto/ordererOrg/orderers/orderer.${this.ORDERER_DOMAIN}/tls/ca.crt`;
@@ -24,72 +24,37 @@ export class FabricService {
         this.fabricProjectPath = fabricProjectPath;
     }
 
-    /**
-     * Executes a shell command with error handling.
-     * @param command The command to execute.
-     * @param options The options for child_process.exec.
-     * @returns The stdout of the command.
-     * @throws Error if the command fails.
-     */
     private async executeCommand(command: string, options?: { cwd?: string, env?: NodeJS.ProcessEnv }): Promise<string> {
-        console.log(`Executing command: ${command}`);
+        // This helper is now primarily for query, which reliably uses stdout
         try {
             const { stdout, stderr } = await execPromise(command, options);
-            const stdoutString = stdout.toString(); // Convert to string
-            const stderrString = stderr.toString(); // Convert to string
-
-            if (stderrString.trim()) { // Check if stderr has content after trimming
-                console.warn(`Command stderr: ${stderrString.trim()}`);
+            if (stderr) {
+                console.warn(`Command stderr: ${stderr}`);
             }
-            return stdoutString.trim();
+            return stdout.toString().trim();
         } catch (error: any) {
-            console.error(`Command failed: ${command}`);
-            console.error(`Error stdout: ${error.stdout ? error.stdout.toString() : 'N/A'}`);
-            console.error(`Error stderr: ${error.stderr ? error.stderr.toString() : 'N/A'}`);
-            throw new Error(`Command execution failed: ${error.stderr ? error.stderr.toString() : error.message}`);
+            const errorMessage = error.stderr?.toString() || error.stdout?.toString() || error.message;
+            console.error(`Command execution failed: ${errorMessage}`);
+            throw new Error(`Command execution failed: ${errorMessage}`);
         }
     }
 
-    /**
-     * Deploys the Hyperledger Fabric network by running deploy-charitychain.sh.
-     * This is an asynchronous operation that logs its output.
-     */
     public deployNetwork(): void {
         const scriptPath = path.join(this.fabricProjectPath, 'deploy-charitychain.sh');
         console.log(`Starting network deployment script: ${scriptPath}`);
-
-        // Spawn to handle long-running process and stream output
-        const deployProcess = spawn('bash', [scriptPath], {
-            cwd: this.fabricProjectPath,
-            stdio: 'pipe' // Pipe stdout and stderr
-        });
-
-        deployProcess.stdout.on('data', (data) => {
-            process.stdout.write(`DEPLOY SCRIPT (stdout): ${data.toString()}`);
-        });
-
-        deployProcess.stderr.on('data', (data) => {
-            process.stderr.write(`DEPLOY SCRIPT (stderr): ${data.toString()}`);
-        });
-
+        const deployProcess = spawn('bash', [scriptPath], { cwd: this.fabricProjectPath, stdio: 'pipe' });
+        deployProcess.stdout.on('data', (data) => process.stdout.write(`DEPLOY SCRIPT (stdout): ${data}`));
+        deployProcess.stderr.on('data', (data) => process.stderr.write(`DEPLOY SCRIPT (stderr): ${data}`));
         deployProcess.on('close', (code) => {
-            if (code === 0) {
-                console.log('Fabric network deployment script finished successfully.');
-            } else {
-                console.error(`Fabric network deployment script exited with code ${code}`);
-            }
+            if (code === 0) console.log('Fabric network deployment script finished successfully.');
+            else console.error(`Fabric network deployment script exited with code ${code}`);
         });
-
-        deployProcess.on('error', (err) => {
-            console.error(`Failed to start deployment script process: ${err.message}`);
-        });
+        deployProcess.on('error', (err) => console.error(`Failed to start deployment script process: ${err.message}`));
     }
 
     /**
-     * Executes a chaincode invoke operation.
-     * @param functionName The chaincode function to invoke.
-     * @param args Arguments for the chaincode function.
-     * @returns The result payload from the chaincode.
+     * Executes a chaincode invoke operation. This version no longer assumes the command will
+     * fail and proactively parses the output for the payload.
      */
     public async invokeChaincode(functionName: string, args: string[]): Promise<string> {
         const argsJson = JSON.stringify({ Args: [functionName, ...args] });
@@ -101,35 +66,62 @@ export class FabricService {
             --peerAddresses "peer0-${this.DONOR_ORG}.${this.DONOR_DOMAIN}:9051" --tlsRootCertFiles "${this.DONOR_PEER_TLS_CA_PATH_IN_CLI}" \
             --waitForEvent`;
 
+        console.log(`Executing invoke command: ${command}`);
         try {
+            // Execute the command and capture both stdout and stderr from the result
             const { stdout, stderr } = await execPromise(command, { cwd: this.fabricProjectPath });
-            const stderrString = stderr.toString(); // Convert to string
-            const stdoutString = stdout.toString(); // Convert to string
             
-            // The 'invoke' command often logs the payload to stderr, not stdout.
-            if (stderrString.includes('payload:')) {
-                const payloadMatch = stderrString.match(/payload:"([^"]*)"/);
-                if (payloadMatch && payloadMatch[1]) {
-                    // Fabric often escapes inner quotes in the payload. Unescape it.
-                    const unescapedPayload = payloadMatch[1].replace(/\\"/g, '"');
-                    return unescapedPayload;
+            // The payload can be in stderr even on a successful exit. Combine both streams.
+            const output = stdout.toString() + stderr.toString();
+            console.log("Invoke command full output:", output);
+
+            const payloadMarker = 'payload:';
+            const payloadIndex = output.indexOf(payloadMarker);
+
+            if (payloadIndex !== -1) {
+                // Extract the substring that starts after 'payload:'
+                let payload = output.substring(payloadIndex + payloadMarker.length);
+                
+                // Find the first '{' and last '}' to reliably extract the JSON object
+                const firstBrace = payload.indexOf('{');
+                const lastBrace = payload.lastIndexOf('}');
+
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                    const jsonPayload = payload.substring(firstBrace, lastBrace + 1);
+                    console.log(`Successfully extracted payload: ${jsonPayload}`);
+                    return jsonPayload;
                 }
             }
-            // Fallback: if payload not found in stderr, return stdout or a default message
-            return stdoutString.trim() || "Chaincode invoke completed without explicit payload in stdout/stderr.";
+
+            // If the command succeeded but we couldn't find a payload, we log it.
+            console.warn("Invoke completed, but no valid JSON payload was found in the output.");
+            // Return a structured error message
+            return JSON.stringify({ error: "Invoke completed, but no valid JSON payload was found." });
 
         } catch (error: any) {
-            // Error.stderr will contain the actual Fabric CLI error message
-            throw new Error(`Chaincode invoke failed: ${error.stderr ? error.stderr.toString() : error.message}`);
+            // This block will now only catch genuine command execution failures.
+            // However, we still check the output for a payload, as some errors might contain it.
+             const output = error.stderr?.toString() || error.stdout?.toString() || "";
+             if (output.includes('payload:')) {
+                // If there's an error but we still got a payload, let's try to return it
+                 const payloadMarker = 'payload:';
+                 const payloadIndex = output.indexOf(payloadMarker);
+                 let payload = output.substring(payloadIndex + payloadMarker.length);
+                 const firstBrace = payload.indexOf('{');
+                 const lastBrace = payload.lastIndexOf('}');
+                 if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                     const jsonPayload = payload.substring(firstBrace, lastBrace + 1);
+                     console.log(`Successfully extracted payload from error output: ${jsonPayload}`);
+                     return jsonPayload;
+                 }
+             }
+
+            const errorMessage = error.stderr?.toString() || error.stdout?.toString() || error.message;
+            console.error(`Chaincode invoke failed with an error: ${errorMessage}`);
+            throw new Error(`Chaincode invoke failed: ${errorMessage}`);
         }
     }
 
-    /**
-     * Executes a chaincode query operation.
-     * @param functionName The chaincode function to query.
-     * @param args Arguments for the chaincode function.
-     * @returns The result from the chaincode query.
-     */
     public async queryChaincode(functionName: string, args: string[]): Promise<any> {
         const argsJson = JSON.stringify({ Args: [functionName, ...args] });
         const command = `docker exec cli peer chaincode query \
@@ -142,37 +134,22 @@ export class FabricService {
                 return JSON.parse(stdout);
             } catch (parseError) {
                 console.warn(`Could not parse query result as JSON, returning raw string. Error: ${parseError}`);
-                return stdout; // Return raw string if not valid JSON
+                return stdout;
             }
         } catch (error: any) {
             throw new Error(`Chaincode query failed: ${error.message}`);
         }
     }
 
-    // --- Specific Chaincode API Methods ---
-
-    /**
-     * Creates a new donation and associated NFT.
-     */
     public async createDonation(donationId: string, donorId: string, amount: string, charityId: string, timestamp: string): Promise<string> {
-        // Ensure timestamp is properly formatted for the chaincode
-        // Example: "2024-01-01T10:00:00Z"
         return this.invokeChaincode('createDonation', [donationId, donorId, amount, charityId, timestamp]);
     }
 
-    /**
-     * Retrieves all donation records.
-     */
     public async getAllDonations(): Promise<any[]> {
-        const result = await this.queryChaincode('getAllDonations', []);
-        return result;
+        return this.queryChaincode('getAllDonations', []);
     }
 
-    /**
-     * Retrieves all NFT metadata.
-     */
     public async getAllNFTs(): Promise<any[]> {
-        const result = await this.queryChaincode('getAllNFTs', []);
-        return result;
+        return this.queryChaincode('getAllNFTs', []);
     }
 }
