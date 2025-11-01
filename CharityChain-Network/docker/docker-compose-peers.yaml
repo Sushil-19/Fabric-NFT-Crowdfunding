@@ -1,0 +1,184 @@
+version: '2.4' # Specifying a version that supports 'depends_on' and 'networks'
+networks:
+  charitychain-net:
+    external: true
+
+services:
+  orderer.orderer.example.com:
+    container_name: orderer.orderer.example.com
+    image: hyperledger/fabric-orderer:2.5
+    platform: linux/amd64
+    environment:
+      - FABRIC_LOGGING_SPEC=INFO
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_LISTENPORT=7050
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/genesis-block/genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=ordererOrgMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/var/hyperledger/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=/var/hyperledger/orderer/tls/ca.crt # Corrected: Removed square brackets
+      - ORDERER_KAFKA_TOPIC_REPLICATIONFACTOR=1
+      - ORDERER_KAFKA_VERBOSE=true
+      - ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=/var/hyperledger/orderer/tls/server.crt
+      - ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=/var/hyperledger/orderer/tls/server.key
+      - ORDERER_GENERAL_CLUSTER_ROOTCAS=/var/hyperledger/orderer/tls/ca.crt # Corrected: Removed square brackets
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric
+    command: orderer
+    volumes:
+      - ../system-genesis-block:/var/hyperledger/orderer/genesis-block
+      - ../organizations/ordererOrg/msp:/var/hyperledger/orderer/msp
+      - ../organizations/ordererOrg/tls:/var/hyperledger/orderer/tls
+    ports:
+      - 7050:7050
+    networks:
+      - charitychain-net
+
+  ca-charityOrg.charity.example.com:
+    container_name: ca-charityOrg.charity.example.com
+    image: hyperledger/fabric-ca:1.5.7
+    platform: linux/amd64
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-charityOrg
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=7054
+      - FABRIC_CA_SERVER_CSR_HOSTS=ca-charityOrg.charity.example.com,localhost
+      - FABRIC_CA_SERVER_DEBUG=true
+    ports:
+      - "7054:7054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/charityOrg/ca:/etc/hyperledger/fabric-ca-server
+      - ../organizations:/etc/hyperledger/fabric-ca-server/organizations
+    networks:
+      - charitychain-net
+
+  peer0-charityOrg.charity.example.com:
+    container_name: peer0-charityOrg.charity.example.com
+    image: hyperledger/fabric-peer:2.5
+    platform: linux/amd64
+    environment:
+      - CORE_VM_ENDPOINT=unix:///var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=charitychain-net
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_ID=peer0-charityOrg.charity.example.com
+      - CORE_PEER_ADDRESS=peer0-charityOrg.charity.example.com:7051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:7051
+      - CORE_PEER_CHAINCODEADDRESS=peer0-charityOrg.charity.example.com:7052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0-charityOrg.charity.example.com:7051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0-charityOrg.charity.example.com:7051
+      - CORE_PEER_LOCALMSPID=charityOrgMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_OPERATIONS_LISTENADDRESS=0.0.0.0:9443
+      - CORE_METRICS_PROVIDER=prometheus
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../organizations/charityOrg/peers/peer0-charityOrg.charity.example.com/msp:/etc/hyperledger/fabric/msp
+      - ../organizations/charityOrg/peers/peer0-charityOrg.charity.example.com/tls:/etc/hyperledger/fabric/tls
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    ports:
+      - 7051:7051
+      - 9443:9443
+    networks:
+      - charitychain-net
+    depends_on:
+      - ca-charityOrg.charity.example.com
+
+  ca-donorOrg.donor.example.com:
+    container_name: ca-donorOrg.donor.example.com
+    image: hyperledger/fabric-ca:1.5.7
+    platform: linux/amd64
+    environment:
+      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
+      - FABRIC_CA_SERVER_CA_NAME=ca-donorOrg
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_PORT=8054
+      - FABRIC_CA_SERVER_CSR_HOSTS=ca-donorOrg.donor.example.com,localhost
+      - FABRIC_CA_SERVER_DEBUG=true
+    ports:
+      - "8054:8054"
+    command: sh -c 'fabric-ca-server start -b admin:adminpw -d'
+    volumes:
+      - ../organizations/donorOrg/ca:/etc/hyperledger/fabric-ca-server
+      - ../organizations:/etc/hyperledger/fabric-ca-server/organizations
+    networks:
+      - charitychain-net
+
+  peer0-donorOrg.donor.example.com:
+    container_name: peer0-donorOrg.donor.example.com
+    image: hyperledger/fabric-peer:2.5
+    platform: linux/amd64
+    environment:
+      - CORE_VM_ENDPOINT=unix:///var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=charitychain-net
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_ID=peer0-donorOrg.donor.example.com
+      - CORE_PEER_ADDRESS=peer0-donorOrg.donor.example.com:9051
+      - CORE_PEER_LISTENADDRESS=0.0.0.0:9051
+      - CORE_PEER_CHAINCODEADDRESS=peer0-donorOrg.donor.example.com:9052
+      - CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:9052
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0-donorOrg.donor.example.com:9051
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0-donorOrg.donor.example.com:9051
+      - CORE_PEER_LOCALMSPID=donorOrgMSP
+      - CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/fabric/msp
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/etc/hyperledger/fabric/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/etc/hyperledger/fabric/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/etc/hyperledger/fabric/tls/ca.crt
+      - CORE_PEER_OPERATIONS_LISTENADDRESS=0.0.0.0:9444
+      - CORE_METRICS_PROVIDER=prometheus
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../organizations/donorOrg/peers/peer0-donorOrg.donor.example.com/msp:/etc/hyperledger/fabric/msp
+      - ../organizations/donorOrg/peers/peer0-donorOrg.donor.example.com/tls:/etc/hyperledger/fabric/tls
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    ports:
+      - 9051:9051
+      - 9444:9444
+    networks:
+      - charitychain-net
+    depends_on:
+      - ca-donorOrg.donor.example.com
+
+  cli:
+    container_name: cli
+    image: hyperledger/fabric-tools:2.5
+    platform: linux/amd64
+    tty: true
+    stdin_open: true
+    environment:
+      - GOPATH=/opt/gopath
+      - CORE_VM_ENDPOINT=unix:///var/run/docker.sock
+      - FABRIC_LOGGING_SPEC=INFO
+      - CORE_PEER_ID=cli
+      - CORE_PEER_ADDRESS=peer0-charityOrg.charity.example.com:7051
+      - CORE_PEER_LOCALMSPID=charityOrgMSP
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_ROOTCERT_FILE=/opt/hyperledger/fabric/crypto/charityOrg/peers/peer0-charityOrg.charity.example.com/tls/ca.crt
+      - CORE_PEER_MSPCONFIGPATH=/opt/hyperledger/fabric/crypto/charityOrg/users/Admin@charity.example.com/msp
+      - ORDERER_CA=/opt/hyperledger/fabric/crypto/ordererOrg/tls/ca.crt
+    working_dir: /opt/peer
+    command: /bin/bash
+    volumes:
+      - ../chaincode:/opt/gopath/src/chaincode
+      - /var/run/docker.sock:/var/run/docker.sock # CORRECTED LINE
+      - ../organizations:/opt/hyperledger/fabric/crypto
+      - ../channel-artifacts:/opt/hyperledger/fabric/channel-artifacts
+      - ../scripts:/opt/hyperledger/fabric/scripts
+      - ../system-genesis-block:/opt/hyperledger/fabric/system-genesis-block
+    networks:
+      - charitychain-net
+    depends_on:
+      - orderer.orderer.example.com
+      - peer0-charityOrg.charity.example.com
+      - peer0-donorOrg.donor.example.com

@@ -1,0 +1,542 @@
+// src/app.ts
+import express from 'express';
+import bodyParser from 'body-parser';
+import { FabricService } from './fabricService';
+import path from 'path';
+
+const app = express();
+const port = 4000;
+
+// Middleware
+app.use(bodyParser.json());
+
+// Initialize FabricService with the base path where your Hyperledger Fabric project resides
+// Assuming your deploy-charitychain.sh is at the root of your Fabric project
+// and this Node.js backend is at the same level or configured correctly.
+const fabricProjectPath = path.resolve(__dirname, '../../'); // Adjust this path as needed
+const fabricService = new FabricService(fabricProjectPath);
+
+// Routes
+
+/**
+ * @api {post} /network/deploy Deploy Fabric Network
+ * @apiName DeployNetwork
+ * @apiGroup Network
+ * @apiDescription Executes the deploy-charitychain.sh script to set up the Hyperledger Fabric network.
+ * This is a long-running operation and should only be triggered when setting up or resetting the network.
+ * @apiSuccess {String} message Status message indicating deployment initiation.
+ * @apiError {Object} error Error details if the deployment fails to start.
+ */
+app.post('/network/deploy', async (req, res) => {
+    try {
+        console.log('API: Initiating Fabric network deployment...');
+        // Execute the deploy script in the background or with streaming output if needed
+        fabricService.deployNetwork();
+        res.status(202).send({ message: 'Fabric network deployment initiated. Check server logs for progress.' });
+    } catch (error: any) {
+        console.error(`API: Error initiating deployment: ${error.message}`);
+        res.status(500).send({ error: `Failed to initiate network deployment: ${error.message}` });
+    }
+});
+
+/**
+ * @api {post} /donations Create New Donation
+ * @apiName CreateDonation
+ * @apiGroup Donations
+ * @apiDescription Creates a new donation record on the Hyperledger Fabric ledger and mints an associated NFT.
+ * @apiBody {String} donationId Unique ID for the donation.
+ * @apiBody {String} donorId ID of the donor.
+ * @apiBody {String} amount Amount of the donation (as a string).
+ * @apiBody {String} charityId ID of the charity receiving the donation.
+ * @apiBody {String} timestamp ISO 8601 formatted timestamp (e.g., "2024-01-01T10:00:00Z").
+ * @apiSuccess {String} message Success message.
+ * @apiSuccess {Object} data JSON string of the created donation object.
+ * @apiError {Object} error Error details if the transaction fails.
+ */
+app.post('/donations', async (req, res) => {
+    const { donationId, donorId, amount, charityId, timestamp } = req.body;
+
+    if (!donationId || !donorId || !amount || !charityId || !timestamp) {
+        return res.status(400).send({ error: 'Missing required fields for donation.' });
+    }
+
+    try {
+        console.log(`API: Creating donation: ${donationId}`);
+        const result = await fabricService.createDonation(donationId, donorId, amount, charityId, timestamp);
+        let responseData;
+        try {
+            // Attempt to parse the string result into a JSON object.
+            responseData = JSON.parse(result);
+        } catch (e) {
+            // If parsing fails, it might be a simple string message (e.g., "OK").
+            // In that case, we'll just send the raw string.
+            console.warn('The chaincode response was not a valid JSON string. Returning raw response.');
+            responseData = result;
+        }
+        res.status(200).send({ message: 'Donation created successfully', responseData });
+    } catch (error: any) {
+        console.error(`API: Error creating donation: ${error.message}`);
+        res.status(500).send({ error: `Failed to create donation: ${error.message}` });
+    }
+});
+
+/**
+ * @api {get} /donations Get All Donations
+ * @apiName GetAllDonations
+ * @apiGroup Donations
+ * @apiDescription Retrieves all donation records from the Hyperledger Fabric ledger.
+ * @apiSuccess {String} message Success message.
+ * @apiSuccess {Object[]} data Array of donation objects.
+ * @apiError {Object} error Error details if the query fails.
+ */
+app.get('/donations', async (req, res) => {
+    try {
+        console.log('API: Fetching all donations...');
+        const result = await fabricService.getAllDonations();
+        res.status(200).send({ message: 'Successfully retrieved all donations', data: result });
+    } catch (error: any) {
+        console.error(`API: Error fetching all donations: ${error.message}`);
+        res.status(500).send({ error: `Failed to retrieve donations: ${error.message}` });
+    }
+});
+
+/**
+ * @api {get} /nfts Get All NFTs
+ * @apiName GetAllNFTs
+ * @apiGroup NFTs
+ * @apiDescription Retrieves all NFT metadata records from the Hyperledger Fabric ledger.
+ * @apiSuccess {String} message Success message.
+ * @apiSuccess {Object[]} data Array of NFT metadata objects.
+ * @apiError {Object} error Error details if the query fails.
+ */
+app.get('/nfts', async (req, res) => {
+    try {
+        console.log('API: Fetching all NFTs...');
+        const result = await fabricService.getAllNFTs();
+        res.status(200).send({ message: 'Successfully retrieved all NFTs', data: result });
+    } catch (error: any) {
+        console.error(`API: Error fetching all NFTs: ${error.message}`);
+        res.status(500).send({ error: `Failed to retrieve NFTs: ${error.message}` });
+    }
+});
+
+
+// Start the server
+app.listen(port, () => {
+    console.log(`Backend server listening at http://localhost:${port}`);
+    console.log(`API documentation (if generated) would be at http://localhost:${port}/api-docs`);
+});
+
+
+
+
+
+
+// src/fabricService.ts
+import { exec, spawn } from 'child_process';
+import path from 'path';
+import { promisify } from 'util';
+
+const execPromise = promisify(exec);
+
+export class FabricService {
+    private fabricProjectPath: string;
+    private readonly CHAINCODE_NAME = "donationcc";
+    private readonly CHANNEL_NAME = "donationchannel";
+    private readonly ORDERER_DOMAIN = "orderer.example.com";
+    private readonly CHARITY_ORG = "charityOrg";
+    private readonly CHARITY_DOMAIN = "charity.example.com";
+    private readonly DONOR_ORG = "donorOrg";
+    private readonly DONOR_DOMAIN = "donor.example.com";
+
+    // Define paths to orderer and peer TLS CA certs inside CLI for convenience
+    private readonly ORDERER_CA_PATH_IN_CLI = `/opt/hyperledger/fabric/crypto/ordererOrg/orderers/orderer.${this.ORDERER_DOMAIN}/tls/ca.crt`;
+    private readonly CHARITY_PEER_TLS_CA_PATH_IN_CLI = `/opt/hyperledger/fabric/crypto/${this.CHARITY_ORG}/peers/peer0-${this.CHARITY_ORG}.${this.CHARITY_DOMAIN}/tls/ca.crt`;
+    private readonly DONOR_PEER_TLS_CA_PATH_IN_CLI = `/opt/hyperledger/fabric/crypto/${this.DONOR_ORG}/peers/peer0-${this.DONOR_ORG}.${this.DONOR_DOMAIN}/tls/ca.crt`;
+
+    constructor(fabricProjectPath: string) {
+        this.fabricProjectPath = fabricProjectPath;
+    }
+
+    private async executeCommand(command: string, options?: { cwd?: string, env?: NodeJS.ProcessEnv }): Promise<string> {
+        // This helper is now primarily for query, which reliably uses stdout
+        try {
+            const { stdout, stderr } = await execPromise(command, options);
+            if (stderr) {
+                console.warn(`Command stderr: ${stderr}`);
+            }
+            return stdout.toString().trim();
+        } catch (error: any) {
+            const errorMessage = error.stderr?.toString() || error.stdout?.toString() || error.message;
+            console.error(`Command execution failed: ${errorMessage}`);
+            throw new Error(`Command execution failed: ${errorMessage}`);
+        }
+    }
+
+    public deployNetwork(): void {
+        const scriptPath = path.join(this.fabricProjectPath, 'deploy-charitychain.sh');
+        console.log(`Starting network deployment script: ${scriptPath}`);
+        const deployProcess = spawn('bash', [scriptPath], { cwd: this.fabricProjectPath, stdio: 'pipe' });
+        deployProcess.stdout.on('data', (data) => process.stdout.write(`DEPLOY SCRIPT (stdout): ${data}`));
+        deployProcess.stderr.on('data', (data) => process.stderr.write(`DEPLOY SCRIPT (stderr): ${data}`));
+        deployProcess.on('close', (code) => {
+            if (code === 0) console.log('Fabric network deployment script finished successfully.');
+            else console.error(`Fabric network deployment script exited with code ${code}`);
+        });
+        deployProcess.on('error', (err) => console.error(`Failed to start deployment script process: ${err.message}`));
+    }
+
+    /**
+     * Executes a chaincode invoke operation. This version no longer assumes the command will
+     * fail and proactively parses the output for the payload.
+     */
+    public async invokeChaincode(functionName: string, args: string[]): Promise<string> {
+        const argsJson = JSON.stringify({ Args: [functionName, ...args] });
+        const command = `docker exec cli peer chaincode invoke \
+            -o "orderer.${this.ORDERER_DOMAIN}:7050" --tls --cafile "${this.ORDERER_CA_PATH_IN_CLI}" \
+            -C "${this.CHANNEL_NAME}" -n "${this.CHAINCODE_NAME}" \
+            -c '${argsJson}' \
+            --peerAddresses "peer0-${this.CHARITY_ORG}.${this.CHARITY_DOMAIN}:7051" --tlsRootCertFiles "${this.CHARITY_PEER_TLS_CA_PATH_IN_CLI}" \
+            --peerAddresses "peer0-${this.DONOR_ORG}.${this.DONOR_DOMAIN}:9051" --tlsRootCertFiles "${this.DONOR_PEER_TLS_CA_PATH_IN_CLI}" \
+            --waitForEvent`;
+
+        console.log(`Executing invoke command: ${command}`);
+        try {
+            // Execute the command and capture both stdout and stderr from the result
+            const { stdout, stderr } = await execPromise(command, { cwd: this.fabricProjectPath });
+            
+            // The payload can be in stderr even on a successful exit. Combine both streams.
+            const output = stdout.toString() + stderr.toString();
+            console.log("Invoke command full output:", output);
+
+            const payloadMarker = 'payload:';
+            const payloadIndex = output.indexOf(payloadMarker);
+
+            if (payloadIndex !== -1) {
+                // Extract the substring that starts after 'payload:'
+                let payload = output.substring(payloadIndex + payloadMarker.length);
+                
+                // Find the first '{' and last '}' to reliably extract the JSON object
+                const firstBrace = payload.indexOf('{');
+                const lastBrace = payload.lastIndexOf('}');
+
+                if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                    const jsonPayload = payload.substring(firstBrace, lastBrace + 1);
+                    console.log(`Successfully extracted payload: ${jsonPayload}`);
+                    return jsonPayload;
+                }
+            }
+
+            // If the command succeeded but we couldn't find a payload, we log it.
+            console.warn("Invoke completed, but no valid JSON payload was found in the output.");
+            // Return a structured error message
+            return JSON.stringify({ error: "Invoke completed, but no valid JSON payload was found." });
+
+        } catch (error: any) {
+            // This block will now only catch genuine command execution failures.
+            // However, we still check the output for a payload, as some errors might contain it.
+             const output = error.stderr?.toString() || error.stdout?.toString() || "";
+             if (output.includes('payload:')) {
+                // If there's an error but we still got a payload, let's try to return it
+                 const payloadMarker = 'payload:';
+                 const payloadIndex = output.indexOf(payloadMarker);
+                 let payload = output.substring(payloadIndex + payloadMarker.length);
+                 const firstBrace = payload.indexOf('{');
+                 const lastBrace = payload.lastIndexOf('}');
+                 if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                     const jsonPayload = payload.substring(firstBrace, lastBrace + 1);
+                     console.log(`Successfully extracted payload from error output: ${jsonPayload}`);
+                     return jsonPayload;
+                 }
+             }
+
+            const errorMessage = error.stderr?.toString() || error.stdout?.toString() || error.message;
+            console.error(`Chaincode invoke failed with an error: ${errorMessage}`);
+            throw new Error(`Chaincode invoke failed: ${errorMessage}`);
+        }
+    }
+
+    public async queryChaincode(functionName: string, args: string[]): Promise<any> {
+        const argsJson = JSON.stringify({ Args: [functionName, ...args] });
+        const command = `docker exec cli peer chaincode query \
+            -C "${this.CHANNEL_NAME}" -n "${this.CHAINCODE_NAME}" \
+            -c '${argsJson}'`;
+
+        try {
+            const stdout = await this.executeCommand(command, { cwd: this.fabricProjectPath });
+            try {
+                return JSON.parse(stdout);
+            } catch (parseError) {
+                console.warn(`Could not parse query result as JSON, returning raw string. Error: ${parseError}`);
+                return stdout;
+            }
+        } catch (error: any) {
+            throw new Error(`Chaincode query failed: ${error.message}`);
+        }
+    }
+
+    public async createDonation(donationId: string, donorId: string, amount: string, charityId: string, timestamp: string): Promise<string> {
+        return this.invokeChaincode('createDonation', [donationId, donorId, amount, charityId, timestamp]);
+    }
+
+    public async getAllDonations(): Promise<any[]> {
+        return this.queryChaincode('getAllDonations', []);
+    }
+
+    public async getAllNFTs(): Promise<any[]> {
+        return this.queryChaincode('getAllNFTs', []);
+    }
+}
+
+
+
+package.json:
+
+{
+    "name": "fabric-backend",
+    "version": "1.0.0",
+    "description": "Node.js backend for Hyperledger Fabric CharityChain Network",
+    "main": "dist/app.js",
+    "scripts": {
+      "start": "node dist/app.js",
+      "build": "tsc",
+      "dev": "nodemon --watch src --ext ts --exec \"ts-node src/app.ts\"",
+      "clean": "rm -rf dist node_modules"
+    },
+    "keywords": [],
+    "author": "Your Name",
+    "license": "ISC",
+    "dependencies": {
+      "body-parser": "^1.20.2",
+      "express": "^4.19.2"
+    },
+    "devDependencies": {
+      "@types/express": "^4.17.21",
+      "@types/node": "^20.14.9",
+      "nodemon": "^3.1.4",
+      "ts-node": "^10.9.2",
+      "typescript": "^5.5.3"
+    }
+  }
+
+
+ReadStream.md:
+
+# Hyperledger Fabric Backend
+
+This is a Node.js (TypeScript) backend application that interacts with a Hyperledger Fabric network to manage donations and NFTs.
+
+## Project Structure
+
+```
+.
+├── src/
+│   ├── app.ts            # Main Express application, API routes
+│   └── fabricService.ts  # Logic for interacting with Hyperledger Fabric CLI
+├── package.json
+├── tsconfig.json
+└── README.md             # This file
+```
+
+## Prerequisites
+
+Before running this backend, ensure you have:
+
+1.  **Node.js (LTS version recommended)** and **npm** installed.
+2.  **TypeScript** installed globally or locally (`npm install -g typescript` or `npm install typescript`).
+3.  **Your Hyperledger Fabric network setup files** (`deploy-charitychain.sh`, `test.sh`, `organizations`, `chaincode`, etc.) in the **parent directory** relative to where this Node.js project is located. The `fabricService.ts` assumes the `deploy-charitychain.sh` script is at `../../deploy-charitychain.sh` from `src/fabricService.ts`. **Adjust the `fabricProjectPath` in `src/app.ts` if your directory structure is different.**
+4.  **Docker Desktop** running.
+
+## Installation
+
+1.  **Navigate into the backend project directory** (e.g., `cd path/to/your/backend`).
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    ```
+
+## Running the Application
+
+### Development Mode (with Nodemon)
+
+```bash
+npm run dev
+```
+This will start the server and automatically restart it on code changes.
+
+### Production Mode
+
+1.  **Build the TypeScript code:**
+    ```bash
+    npm run build
+    ```
+2.  **Start the server:**
+    ```bash
+    npm start
+    ```
+
+The server will typically run on `http://localhost:3000`.
+
+## API Endpoints
+
+All API endpoints will return JSON responses.
+
+### 1. Deploy Fabric Network
+
+**Initiates the deployment of your Hyperledger Fabric network.** This will execute `deploy-charitychain.sh`. This is a long-running operation.
+
+* **URL:** `/network/deploy`
+* **Method:** `POST`
+* **Body:** None
+* **Example Request (using curl):**
+    ```bash
+    curl -X POST http://localhost:3000/network/deploy
+    ```
+* **Example Success Response (202 Accepted):**
+    ```json
+    {
+        "message": "Fabric network deployment initiated. Check server logs for progress."
+    }
+    ```
+
+### 2. Create New Donation
+
+**Creates a new donation record on the ledger and mints an associated NFT.**
+
+* **URL:** `/donations`
+* **Method:** `POST`
+* **Body:** JSON object with donation details.
+    ```json
+    {
+        "donationId": "donation_xyz",
+        "donorId": "donor_abc",
+        "amount": "150",
+        "charityId": "charity_mno",
+        "timestamp": "2024-06-19T10:30:00Z"
+    }
+    ```
+* **Example Request (using curl):**
+    ```bash
+    curl -X POST -H "Content-Type: application/json" -d '{
+        "donationId": "donationApi1",
+        "donorId": "donorE",
+        "amount": "200",
+        "charityId": "charityZ",
+        "timestamp": "2024-06-19T15:00:00Z"
+    }' http://localhost:3000/donations
+    ```
+* **Example Success Response (200 OK):**
+    ```json
+    {
+        "message": "Donation created successfully",
+        "data": "{\"donationId\":\"donationApi1\",\"donorId\":\"donorE\",\"amount\":\"200\",\"charityId\":\"charityZ\",\"timestamp\":\"2024-06-19T15:00:00Z\",\"docType\":\"donation\",\"nftId\":\"nft-donationApi1\"}"
+    }
+    ```
+
+### 3. Get All Donations
+
+**Retrieves all donation records from the ledger.**
+
+* **URL:** `/donations`
+* **Method:** `GET`
+* **Example Request (using curl):**
+    ```bash
+    curl http://localhost:3000/donations
+    ```
+* **Example Success Response (200 OK):**
+    ```json
+    {
+        "message": "Successfully retrieved all donations",
+        "data": [
+            {
+                "donationId": "donation0",
+                "donorId": "initialDonor",
+                "amount": "50",
+                "charityId": "initialCharity",
+                "timestamp": "2023-01-01T00:00:00Z",
+                "nftId": "nft0",
+                "docType": "donation"
+            },
+            {
+                "donationId": "donationApi1",
+                "donorId": "donorE",
+                "amount": "200",
+                "charityId": "charityZ",
+                "timestamp": "2024-06-19T15:00:00Z",
+                "docType": "donation",
+                "nftId": "nft-donationApi1"
+            }
+        ]
+    }
+    ```
+
+### 4. Get All NFTs
+
+**Retrieves all NFT metadata records from the ledger.**
+
+* **URL:** `/nfts`
+* **Method:** `GET`
+* **Example Request (using curl):**
+    ```bash
+    curl http://localhost:3000/nfts
+    ```
+* **Example Success Response (200 OK):**
+    ```json
+    {
+        "message": "Successfully retrieved all NFTs",
+        "data": [
+            {
+                "nftId": "nft0",
+                "donationId": "donation0",
+                "donorId": "initialDonor",
+                "amount": "50",
+                "charityId": "initialCharity",
+                "timestamp": "2023-01-01T00:00:00Z",
+                "description": "A unique NFT representing a donation of 50 from initialDonor to initialCharity",
+                "image": "[https://example.com/nft_image.png](https://example.com/nft_image.png)"
+            },
+            {
+                "nftId": "nft-donationApi1",
+                "donationId": "donationApi1",
+                "donorId": "donorE",
+                "amount": "200",
+                "charityId": "charityZ",
+                "timestamp": "2024-06-19T15:00:00Z",
+                "description": "A unique NFT representing a donation of 200 from donorE to charityZ",
+                "image": "[https://example.com/nft_image.png](https://example.com/nft_image.png)"
+            }
+        ]
+    }
+    ```
+
+## Important Notes:
+
+* **Fabric Network State:** This backend assumes your Fabric network is in a ready state (peers, orderer, CAs running). The `/network/deploy` API helps with initial setup.
+* **`deploy-charitychain.sh` Location:** The `fabricService.ts` file assumes your `deploy-charitychain.sh` and associated Fabric project folders (`organizations`, `chaincode`, etc.) are in the **parent directory** of this Node.js backend. If your project structure is different, you **must adjust the `fabricProjectPath` variable** in `src/app.ts` accordingly.
+    * Example: If your backend is in `/myproject/backend` and Fabric files are in `/myproject/fabric`, `fabricProjectPath` should point to `/myproject/fabric`.
+* **Error Handling:** Basic error handling is in place, but for a production application, you would need more robust error logging and user-friendly error messages.
+* **Security:** This example does not include any authentication or authorization for the API endpoints. For a real-world application, this is essential.
+* **Concurrency:** Repeated calls to `/network/deploy` might cause issues if a deployment is already in progress. Consider adding state management to prevent multiple simultaneous deployments.
+
+
+
+curl -X POST http://localhost:4000/network/deploy
+
+curl -X POST -H "Content-Type: application/json" -d '{
+    "donationId": "apiDonation2",
+    "donorId": "apiDonor2",
+    "amount": "12000",
+    "charityId": "apiCharity2",
+    "timestamp": "2024-07-19T10:00:00Z"
+}' http://localhost:4000/donations
+
+curl http://localhost:4000/donations
+
+curl http://localhost:4000/nfts
+
+
+
+# To check the Identity Authentication
+## X.509 certificate validation for actions
+
+command is : > openssl x509 -in /Users/sushildube/Desktop/Fiverr/Fabric-NFT-Crowdfunding/CharityChain-Network/organizations/charityOrg/msp/tlscacerts/tlsca.charity.example.com-cert.pem -noout -text

@@ -1,0 +1,3 @@
+networks:
+  charitychain-net:
+    name: charitychain-net

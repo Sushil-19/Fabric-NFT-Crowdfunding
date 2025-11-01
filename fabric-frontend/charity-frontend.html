@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CharityChain NFT Donations</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            color: #2d3748;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .card {
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .btn-primary {
+            background-color: #4c51bf; /* indigo-700 */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem; /* rounded-lg */
+            transition: background-color 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #322f87; /* indigo-800 */
+        }
+        .btn-secondary {
+            background-color: #6b7280; /* gray-500 */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem; /* rounded-lg */
+            transition: background-color 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background-color: #4a5568; /* gray-700 */
+        }
+        input, textarea {
+            border: 1px solid #cbd5e0; /* gray-300 */
+            border-radius: 0.375rem; /* rounded-md */
+            padding: 0.75rem 1rem;
+            width: 100%;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea; /* indigo-500 */
+            box-shadow: 0 0 0 3px rgba(102, 118, 234, 0.2); /* ring-indigo-200 */
+        }
+        .message-box {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #48bb78; /* green-500 */
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
+        .message-box.error {
+            background-color: #f56565; /* red-500 */
+        }
+        .table-container {
+            overflow-x: auto;
+            border-radius: 0.75rem;
+            border: 1px solid #e2e8f0; /* gray-200 */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0; /* gray-200 */
+        }
+        th {
+            background-color: #f7fafc; /* gray-50 */
+            font-weight: 600;
+            color: #4a5568; /* gray-700 */
+            text-transform: uppercase;
+            font-size: 0.875rem; /* text-sm */
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        tr:nth-child(even) {
+            background-color: #edf2f7; /* gray-100 */
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #ffffff;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            color: white;
+            font-size: 1.5rem;
+            flex-direction: column;
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <div class="container mx-auto p-4 md:p-8">
+        <h1 class="text-4xl font-extrabold text-center text-indigo-800 mb-10">CharityChain NFT Donations</h1>
+
+        <!-- Message Box for notifications -->
+        <div id="messageBox" class="message-box"></div>
+
+        <!-- Loading Overlay -->
+        <div id="loadingOverlay" class="loading-overlay hidden">
+            <div class="loading-spinner"></div>
+            <span id="loadingMessage">Processing... Please wait.</span>
+        </div>
+
+        <!-- Deploy Network Section -->
+        <div class="card">
+            <h2 class="text-2xl font-bold text-indigo-700 mb-4">Deploy Fabric Network</h2>
+            <p class="text-gray-600 mb-4">Initiates the deployment of your Hyperledger Fabric network. This is a long-running operation and should only be triggered when setting up or resetting the network.</p>
+            <button id="deployNetworkBtn" class="btn-primary mb-4">
+                Deploy Network
+            </button>
+            <button id="enableFunctionsBtn" class="btn-secondary">
+                Confirm Network Deployed & Enable Functions
+            </button>
+        </div>
+
+        <!-- Create Donation Section -->
+        <div class="card">
+            <h2 class="text-2xl font-bold text-indigo-700 mb-4">Make a Donation</h2>
+            <form id="createDonationForm" class="space-y-4">
+                <div>
+                    <label for="donationId" class="block text-gray-700 text-sm font-semibold mb-2">Donation ID:</label>
+                    <input type="text" id="donationId" name="donationId" required placeholder="e.g., donation_xyz" disabled>
+                </div>
+                <div>
+                    <label for="donorId" class="block text-gray-700 text-sm font-semibold mb-2">Donor ID:</label>
+                    <input type="text" id="donorId" name="donorId" required placeholder="e.g., donor_abc" disabled>
+                </div>
+                <div>
+                    <label for="amount" class="block text-gray-700 text-sm font-semibold mb-2">Amount:</label>
+                    <input type="number" id="amount" name="amount" required step="0.01" placeholder="e.g., 150" disabled>
+                </div>
+                <div>
+                    <label for="charityId" class="block text-gray-700 text-sm font-semibold mb-2">Charity ID:</label>
+                    <input type="text" id="charityId" name="charityId" required placeholder="e.g., charity_mno" disabled>
+                </div>
+                <div>
+                    <label for="timestamp" class="block text-gray-700 text-sm font-semibold mb-2">Timestamp (ISO 8601):</label>
+                    <input type="datetime-local" id="timestamp" name="timestamp" required disabled>
+                </div>
+                <button type="submit" class="btn-primary w-full" id="createDonationBtn" disabled>
+                    Create Donation & Get NFT
+                </button>
+            </form>
+        </div>
+
+        <!-- View All Donations Section -->
+        <div class="card">
+            <h2 class="text-2xl font-bold text-indigo-700 mb-4">All Donations</h2>
+            <button id="refreshDonationsBtn" class="btn-secondary mb-4" disabled>Refresh Donations</button>
+            <div id="donationsList" class="table-container">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th>Donation ID</th>
+                            <th>Donor ID</th>
+                            <th>Amount</th>
+                            <th>Charity ID</th>
+                            <th>Timestamp</th>
+                            <th>NFT ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Donations will be loaded here -->
+                    </tbody>
+                </table>
+                <p id="noDonations" class="text-gray-500 text-center py-4 hidden">No donations found.</p>
+            </div>
+        </div>
+
+        <!-- View All NFTs Section -->
+        <div class="card">
+            <h2 class="text-2xl font-bold text-indigo-700 mb-4">All NFTs</h2>
+            <button id="refreshNFTsBtn" class="btn-secondary mb-4" disabled>Refresh NFTs</button>
+            <div id="nftsList" class="table-container">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th>NFT ID</th>
+                            <th>Donation ID</th>
+                            <th>Donor ID</th>
+                            <th>Amount</th>
+                            <th>Charity ID</th>
+                            <th>Timestamp</th>
+                            <th>Description</th>
+                            <th>Image</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- NFTs will be loaded here -->
+                    </tbody>
+                </table>
+                <p id="noNFTs" class="text-gray-500 text-center py-4 hidden">No NFTs found.</p>
+            </div>
+        </div>
+    </div>
+
+    <!--
+    IMPORTANT: CORS Configuration!
+    If you are getting "Network error" messages in the console, it is very likely a CORS (Cross-Origin Resource Sharing) issue.
+    Your frontend (e.g., http://localhost:3001) is trying to access your backend (http://localhost:4000), which are different origins (different ports).
+    You MUST enable CORS on your Node.js backend.
+    
+    To fix this, you need to:
+    1. Install the 'cors' package in your backend: `npm install cors`
+    2. Add the following to your `src/app.ts` (or app.js) in your backend:
+       import cors from 'cors'; // At the top with other imports
+       app.use(cors()); // Before your routes, e.g., right after `app.use(bodyParser.json());`
+    
+    Example backend snippet:
+    import express from 'express';
+    import bodyParser from 'body-parser';
+    import cors from 'cors'; // <--- ADD THIS
+    // ... other imports
+
+    const app = express();
+    // ...
+
+    app.use(bodyParser.json());
+    app.use(cors()); // <--- ADD THIS LINE TO ENABLE CORS
+    // ... your routes
+    -->
+    <script>
+        const API_BASE_URL = 'http://localhost:4000'; // Make sure this matches your backend URL
+        const messageBox = document.getElementById('messageBox');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingMessage = document.getElementById('loadingMessage');
+
+        const donationFormInputs = document.querySelectorAll('#createDonationForm input, #createDonationForm button[type="submit"]');
+        const refreshButtons = document.querySelectorAll('#refreshDonationsBtn, #refreshNFTsBtn');
+
+        // Function to show messages
+        function showMessage(message, type = 'success') {
+            messageBox.textContent = message;
+            messageBox.className = `message-box show ${type}`;
+            setTimeout(() => {
+                messageBox.className = 'message-box';
+            }, 5000);
+        }
+
+        // Function to show/hide loading overlay with custom message
+        function showLoading(message = 'Processing... Please wait.') {
+            loadingMessage.textContent = message;
+            loadingOverlay.classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.add('hidden');
+        }
+
+        // Function to enable/disable donation and refresh functionalities
+        function setFunctionsEnabled(enabled) {
+            donationFormInputs.forEach(input => {
+                input.disabled = !enabled;
+            });
+            refreshButtons.forEach(button => {
+                button.disabled = !enabled;
+            });
+
+            if (enabled) {
+                showMessage('Donation and NFT functions are now enabled! Loading initial data...', 'success');
+                loadDonations(); // Load data once enabled
+                loadNFTs();
+            } else {
+                showMessage('Donation and NFT functions are currently disabled. Deploy network first.', 'info');
+            }
+        }
+
+        // Deploy Network
+        document.getElementById('deployNetworkBtn').addEventListener('click', async () => {
+            showMessage('Initiating network deployment. This is a long-running operation. Please check your backend server logs for progress. You can enable functions manually once you believe the network is ready.', 'info');
+            showLoading('Initiating network deployment. This may take a few minutes...');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/network/deploy`, { method: 'POST' });
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage(data.message + ' Please check your backend server logs.', 'success');
+                } else {
+                    // This block handles HTTP errors (e.g., 400, 500) if the server responded.
+                    console.error('Backend responded with an error during deployment:', response.status, response.statusText, data);
+                    showMessage(data.error || `Failed to initiate network deployment. Status: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                // This block handles true network errors (e.g., server not reachable, CORS).
+                console.error('Network error during deployment initiation:', error);
+                showMessage('Network error during deployment initiation. Is the backend running? Is CORS enabled? Check console for details.', 'error');
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Enable Functions Button
+        document.getElementById('enableFunctionsBtn').addEventListener('click', () => {
+            setFunctionsEnabled(true);
+        });
+
+        // Create Donation
+        document.getElementById('createDonationForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            showLoading('Creating donation and minting NFT...');
+
+            const donationId = document.getElementById('donationId').value;
+            const donorId = document.getElementById('donorId').value;
+            const amount = document.getElementById('amount').value;
+            const charityId = document.getElementById('charityId').value;
+            const timestampInput = document.getElementById('timestamp').value;
+            const timestamp = new Date(timestampInput).toISOString().slice(0, 19) + 'Z'; // Format to ISO 8601 with Z
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/donations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ donationId, donorId, amount, charityId, timestamp })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    showMessage(data.message);
+                    document.getElementById('createDonationForm').reset(); // Clear form
+                    // Set default timestamp again after reset
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+                    const day = now.getDate().toString().padStart(2, '0');
+                    const hours = now.getHours().toString().padStart(2, '0');
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    document.getElementById('timestamp').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+                    loadDonations(); // Refresh donations list
+                    loadNFTs(); // Refresh NFTs list
+                } else {
+                    // Handle HTTP errors
+                    console.error('Backend responded with an error during donation creation:', response.status, response.statusText, data);
+                    showMessage(data.error || `Failed to create donation. Status: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                // Handle true network errors
+                console.error('Network error creating donation:', error);
+                showMessage('Network error creating donation. Is the backend running? Is CORS enabled? Check console for details.', 'error');
+            } finally {
+                hideLoading();
+            }
+        });
+
+        // Load All Donations
+        async function loadDonations() {
+            showLoading('Loading donations...');
+            const donationsListBody = document.querySelector('#donationsList tbody');
+            donationsListBody.innerHTML = ''; // Clear previous entries
+            document.getElementById('noDonations').classList.add('hidden');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/donations`);
+                const data = await response.json();
+                if (response.ok && data.data && data.data.length > 0) {
+                    data.data.forEach(donation => {
+                        const row = donationsListBody.insertRow();
+                        row.insertCell().textContent = donation.donationId;
+                        row.insertCell().textContent = donation.donorId;
+                        row.insertCell().textContent = donation.amount;
+                        row.insertCell().textContent = donation.charityId;
+                        row.insertCell().textContent = new Date(donation.timestamp).toLocaleString();
+                        row.insertCell().textContent = donation.nftId || 'N/A';
+                    });
+                } else {
+                    // Handle cases where response is OK but data is empty or malformed
+                    if (response.ok && (!data.data || data.data.length === 0)) {
+                        document.getElementById('noDonations').classList.remove('hidden');
+                    } else {
+                        console.error('Backend responded with an error loading donations:', response.status, response.statusText, data);
+                        showMessage(data.error || `Failed to load donations. Status: ${response.status}`, 'error');
+                        document.getElementById('noDonations').classList.remove('hidden');
+                    }
+                }
+            } catch (error) {
+                // Handle true network errors
+                console.error('Network error loading donations:', error);
+                showMessage('Network error loading donations. Is the backend running? Is CORS enabled? Check console for details.', 'error');
+                document.getElementById('noDonations').classList.remove('hidden');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Load All NFTs
+        async function loadNFTs() {
+            showLoading('Loading NFTs...');
+            const nftsListBody = document.querySelector('#nftsList tbody');
+            nftsListBody.innerHTML = ''; // Clear previous entries
+            document.getElementById('noNFTs').classList.add('hidden');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/nfts`);
+                const data = await response.json();
+                if (response.ok && data.data && data.data.length > 0) {
+                    data.data.forEach(nft => {
+                        const row = nftsListBody.insertRow();
+                        row.insertCell().textContent = nft.nftId;
+                        row.insertCell().textContent = nft.donationId;
+                        row.insertCell().textContent = nft.donorId;
+                        row.insertCell().textContent = nft.amount;
+                        row.insertCell().textContent = nft.charityId;
+                        row.insertCell().textContent = new Date(nft.timestamp).toLocaleString();
+                        row.insertCell().textContent = nft.description || 'N/A';
+                        const imageCell = row.insertCell();
+                        if (nft.image) {
+                            const img = document.createElement('img');
+                            img.src = nft.image;
+                            img.alt = `NFT for ${nft.donationId}`;
+                            img.className = 'w-24 h-auto rounded-md object-cover';
+                            img.onerror = function() {
+                                this.onerror=null; // Prevent infinite loops
+                                this.src='https://placehold.co/96x96/e2e8f0/4a5568?text=No+Image'; // Placeholder if image fails
+                            };
+                            imageCell.appendChild(img);
+                        } else {
+                            imageCell.textContent = 'No Image';
+                        }
+                    });
+                } else {
+                    // Handle cases where response is OK but data is empty or malformed
+                    if (response.ok && (!data.data || data.data.length === 0)) {
+                        document.getElementById('noNFTs').classList.remove('hidden');
+                    } else {
+                        console.error('Backend responded with an error loading NFTs:', response.status, response.statusText, data);
+                        showMessage(data.error || `Failed to load NFTs. Status: ${response.status}`, 'error');
+                        document.getElementById('noNFTs').classList.remove('hidden');
+                    }
+                }
+            } catch (error) {
+                // Handle true network errors
+                console.error('Network error loading NFTs:', error);
+                showMessage('Network error loading NFTs. Is the backend running? Is CORS enabled? Check console for details.', 'error');
+                document.getElementById('noNFTs').classList.remove('hidden');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // Event Listeners for Refresh Buttons
+        document.getElementById('refreshDonationsBtn').addEventListener('click', loadDonations);
+        document.getElementById('refreshNFTsBtn').addEventListener('click', loadNFTs);
+
+        // Initial setup on window load
+        window.onload = () => {
+            // Set default timestamp to current time for convenience
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('timestamp').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+            // Initially disable donation and refresh functionalities
+            setFunctionsEnabled(false);
+            showMessage('Please deploy the network first, then click "Confirm Network Deployed & Enable Functions".', 'info');
+        };
+    </script>
+</body>
+</html>

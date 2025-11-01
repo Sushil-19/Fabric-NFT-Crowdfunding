@@ -1,0 +1,19 @@
+{
+  "name": "donationcc",
+  "version": "1.0.0",
+  "description": "Donation Chaincode for CharityChain Network",
+  "main": "index.js",
+  "engines": {
+    "node": ">=16",
+    "npm": ">=8"
+  },
+  "scripts": {
+    "start": "fabric-chaincode-node start"
+  },
+  "author": "Your Name",
+  "license": "ISC",
+  "dependencies": {
+    "fabric-contract-api": "~2.5.0",
+    "fabric-shim": "~2.5.0"
+  }
+}

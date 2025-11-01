@@ -3,12 +3,14 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import { FabricService } from './fabricService';
 import path from 'path';
+import cors from 'cors';
 
 const app = express();
 const port = 4000;
 
 // Middleware
 app.use(bodyParser.json());
+app.use(cors())
 
 // Initialize FabricService with the base path where your Hyperledger Fabric project resides
 // Assuming your deploy-charitychain.sh is at the root of your Fabric project

@@ -53,21 +53,21 @@ DONOR_PEER_TLS_CA_PATH_IN_CLI="/opt/hyperledger/fabric/crypto/${DONOR_ORG}/peers
 #     echo "$installed_output" | grep -q "Label: ${CHAINCODE_NAME}_${CHAINCODE_VERSION}"
 # }
 
-# # --- Helper function to verify a donation query ---
-# verify_donation() {
-#     local DONATION_ID=$1
-#     echo "Verifying donation '$DONATION_ID' by querying..."
-#     QUERY_RESULT=$(docker exec cli peer chaincode query \
-#       -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c "{\"Args\":[\"queryDonation\",\"$DONATION_ID\"]}")
+# --- Helper function to verify a donation query ---
+verify_donation() {
+    local DONATION_ID=$1
+    echo "Verifying donation '$DONATION_ID' by querying..."
+    QUERY_RESULT=$(docker exec cli peer chaincode query \
+      -C "$CHANNEL_NAME" -n "$CHAINCODE_NAME" -c "{\"Args\":[\"queryDonation\",\"$DONATION_ID\"]}")
     
-#     if echo "$QUERY_RESULT" | grep -q "\"donationId\":\"$DONATION_ID\""; then
-#         echo "Donation '$DONATION_ID' successfully queried and found."
-#     else
-#         echo "Error: Donation '$DONATION_ID' not found or query failed."
-#         echo "Query Result: $QUERY_RESULT"
-#         exit 1
-#     fi
-# }
+    if echo "$QUERY_RESULT" | grep -q "\"donationId\":\"$DONATION_ID\""; then
+        echo "Donation '$DONATION_ID' successfully queried and found."
+    else
+        echo "Error: Donation '$DONATION_ID' not found or query failed."
+        echo "Query Result: $QUERY_RESULT"
+        exit 1
+    fi
+}
 
 
 # echo "=================================================="
@@ -190,14 +190,14 @@ sleep 2
 # Define a set of donations to create using an indexed array (more compatible)
 DONATIONS=(
     '{"Args":["createDonation","donation1","donorA","100","charityX","2024-01-01T10:00:00Z"]}'
-    # '{"Args":["createDonation","donation2","donorB","250","charityY","2024-01-02T11:00:00Z"]}'
-    # '{"Args":["createDonation","donation3","donorC","500","charityZ","2024-01-03T12:00:00Z"]}'
-    # '{"Args":["createDonation","donation4","donorA","75","charityX","2024-01-04T13:00:00Z"]}'
-    # '{"Args":["createDonation","donation5","donorB","150","charityY","2024-01-05T14:00:00Z"]}'
-    # '{"Args":["createDonation","donation6","donorC","300","charityZ","2024-01-06T15:00:00Z"]}'
-    # '{"Args":["createDonation","donation7","donorA","120","charityX","2024-01-07T16:00:00Z"]}'
-    # '{"Args":["createDonation","donation8","donorB","400","charityY","2024-01-08T17:00:00Z"]}'
-    # '{"Args":["createDonation","donation9","donorC","600","charityZ","2024-01-09T18:00:00Z"]}'
+    '{"Args":["createDonation","donation2","donorB","250","charityY","2024-01-02T11:00:00Z"]}'
+    '{"Args":["createDonation","donation3","donorC","500","charityZ","2024-01-03T12:00:00Z"]}'
+    '{"Args":["createDonation","donation4","donorA","75","charityX","2024-01-04T13:00:00Z"]}'
+    '{"Args":["createDonation","donation5","donorB","150","charityY","2024-01-05T14:00:00Z"]}'
+    '{"Args":["createDonation","donation6","donorC","300","charityZ","2024-01-06T15:00:00Z"]}'
+    '{"Args":["createDonation","donation7","donorA","120","charityX","2024-01-07T16:00:00Z"]}'
+    '{"Args":["createDonation","donation8","donorB","400","charityY","2024-01-08T17:00:00Z"]}'
+    '{"Args":["createDonation","donation9","donorC","600","charityZ","2024-01-09T18:00:00Z"]}'
 )
 
 # Process all donations
