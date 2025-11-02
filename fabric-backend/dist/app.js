@@ -74,7 +74,15 @@ app.post('/donations', async (req, res) => {
             console.warn('The chaincode response was not a valid JSON string. Returning raw response.');
             responseData = result;
         }
-        res.status(200).send({ message: 'Donation created successfully', responseData });
+        // Include transaction ID in the response if available
+        const responseMessage = responseData.transactionId
+            ? `Donation created successfully. Transaction ID: ${responseData.transactionId}`
+            : 'Donation created successfully';
+        res.status(200).send({
+            message: responseMessage,
+            responseData,
+            transactionId: responseData.transactionId
+        });
     }
     catch (error) {
         console.error(`API: Error creating donation: ${error.message}`);
@@ -114,7 +122,10 @@ app.get('/nfts', async (req, res) => {
     try {
         console.log('API: Fetching all NFTs...');
         const result = await fabricService.getAllNFTs();
-        res.status(200).send({ message: 'Successfully retrieved all NFTs', data: result });
+        console.log('🧩 Raw NFT query result from blockchain:', result);
+        // Ensure always an array
+        const nfts = Array.isArray(result) ? result : [result];
+        res.status(200).send({ message: 'Successfully retrieved all NFTs', data: nfts });
     }
     catch (error) {
         console.error(`API: Error fetching all NFTs: ${error.message}`);

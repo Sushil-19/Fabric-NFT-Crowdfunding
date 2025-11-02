@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,53 +14,77 @@
             background-color: #f0f4f8;
             color: #2d3748;
         }
+
         .container {
             max-width: 1200px;
         }
+
         .card {
             background-color: #ffffff;
-            border-radius: 0.75rem; /* rounded-xl */
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-lg */
+            border-radius: 0.75rem;
+            /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            /* shadow-lg */
             padding: 1.5rem;
             margin-bottom: 1.5rem;
         }
+
         .btn-primary {
-            background-color: #4c51bf; /* indigo-700 */
+            background-color: #4c51bf;
+            /* indigo-700 */
             color: white;
             padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem; /* rounded-lg */
+            border-radius: 0.5rem;
+            /* rounded-lg */
             transition: background-color 0.3s ease;
         }
+
         .btn-primary:hover {
-            background-color: #322f87; /* indigo-800 */
+            background-color: #322f87;
+            /* indigo-800 */
         }
+
         .btn-secondary {
-            background-color: #6b7280; /* gray-500 */
+            background-color: #6b7280;
+            /* gray-500 */
             color: white;
             padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem; /* rounded-lg */
+            border-radius: 0.5rem;
+            /* rounded-lg */
             transition: background-color 0.3s ease;
         }
+
         .btn-secondary:hover {
-            background-color: #4a5568; /* gray-700 */
+            background-color: #4a5568;
+            /* gray-700 */
         }
-        input, textarea {
-            border: 1px solid #cbd5e0; /* gray-300 */
-            border-radius: 0.375rem; /* rounded-md */
+
+        input,
+        textarea {
+            border: 1px solid #cbd5e0;
+            /* gray-300 */
+            border-radius: 0.375rem;
+            /* rounded-md */
             padding: 0.75rem 1rem;
             width: 100%;
             transition: border-color 0.3s ease, box-shadow 0.3s ease;
         }
-        input:focus, textarea:focus {
+
+        input:focus,
+        textarea:focus {
             outline: none;
-            border-color: #667eea; /* indigo-500 */
-            box-shadow: 0 0 0 3px rgba(102, 118, 234, 0.2); /* ring-indigo-200 */
+            border-color: #667eea;
+            /* indigo-500 */
+            box-shadow: 0 0 0 3px rgba(102, 118, 234, 0.2);
+            /* ring-indigo-200 */
         }
+
         .message-box {
             position: fixed;
             top: 20px;
             right: 20px;
-            background-color: #48bb78; /* green-500 */
+            background-color: #48bb78;
+            /* green-500 */
             color: white;
             padding: 1rem 1.5rem;
             border-radius: 0.5rem;
@@ -68,39 +93,56 @@
             opacity: 0;
             transition: opacity 0.5s ease-in-out;
         }
+
         .message-box.show {
             opacity: 1;
         }
+
         .message-box.error {
-            background-color: #f56565; /* red-500 */
+            background-color: #f56565;
+            /* red-500 */
         }
+
         .table-container {
             overflow-x: auto;
             border-radius: 0.75rem;
-            border: 1px solid #e2e8f0; /* gray-200 */
+            border: 1px solid #e2e8f0;
+            /* gray-200 */
         }
+
         table {
             width: 100%;
             border-collapse: collapse;
         }
-        th, td {
+
+        th,
+        td {
             padding: 0.75rem 1rem;
             text-align: left;
-            border-bottom: 1px solid #e2e8f0; /* gray-200 */
+            border-bottom: 1px solid #e2e8f0;
+            /* gray-200 */
         }
+
         th {
-            background-color: #f7fafc; /* gray-50 */
+            background-color: #f7fafc;
+            /* gray-50 */
             font-weight: 600;
-            color: #4a5568; /* gray-700 */
+            color: #4a5568;
+            /* gray-700 */
             text-transform: uppercase;
-            font-size: 0.875rem; /* text-sm */
+            font-size: 0.875rem;
+            /* text-sm */
         }
+
         tr:last-child td {
             border-bottom: none;
         }
+
         tr:nth-child(even) {
-            background-color: #edf2f7; /* gray-100 */
+            background-color: #edf2f7;
+            /* gray-100 */
         }
+
         .loading-spinner {
             border: 4px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
@@ -112,10 +154,17 @@
             display: inline-block;
             vertical-align: middle;
         }
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
+
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -134,6 +183,7 @@
         }
     </style>
 </head>
+
 <body class="p-8">
     <div class="container mx-auto p-4 md:p-8">
         <h1 class="text-4xl font-extrabold text-center text-indigo-800 mb-10">CharityChain NFT Donations</h1>
@@ -150,7 +200,8 @@
         <!-- Deploy Network Section -->
         <div class="card">
             <h2 class="text-2xl font-bold text-indigo-700 mb-4">Deploy Fabric Network</h2>
-            <p class="text-gray-600 mb-4">Initiates the deployment of your Hyperledger Fabric network. This is a long-running operation and should only be triggered when setting up or resetting the network.</p>
+            <p class="text-gray-600 mb-4">Initiates the deployment of your Hyperledger Fabric network. This is a
+                long-running operation and should only be triggered when setting up or resetting the network.</p>
             <button id="deployNetworkBtn" class="btn-primary mb-4">
                 Deploy Network
             </button>
@@ -165,7 +216,8 @@
             <form id="createDonationForm" class="space-y-4">
                 <div>
                     <label for="donationId" class="block text-gray-700 text-sm font-semibold mb-2">Donation ID:</label>
-                    <input type="text" id="donationId" name="donationId" required placeholder="e.g., donation_xyz" disabled>
+                    <input type="text" id="donationId" name="donationId" required placeholder="e.g., donation_xyz"
+                        disabled>
                 </div>
                 <div>
                     <label for="donorId" class="block text-gray-700 text-sm font-semibold mb-2">Donor ID:</label>
@@ -173,14 +225,17 @@
                 </div>
                 <div>
                     <label for="amount" class="block text-gray-700 text-sm font-semibold mb-2">Amount:</label>
-                    <input type="number" id="amount" name="amount" required step="0.01" placeholder="e.g., 150" disabled>
+                    <input type="number" id="amount" name="amount" required step="0.01" placeholder="e.g., 150"
+                        disabled>
                 </div>
                 <div>
                     <label for="charityId" class="block text-gray-700 text-sm font-semibold mb-2">Charity ID:</label>
-                    <input type="text" id="charityId" name="charityId" required placeholder="e.g., charity_mno" disabled>
+                    <input type="text" id="charityId" name="charityId" required placeholder="e.g., charity_mno"
+                        disabled>
                 </div>
                 <div>
-                    <label for="timestamp" class="block text-gray-700 text-sm font-semibold mb-2">Timestamp (ISO 8601):</label>
+                    <label for="timestamp" class="block text-gray-700 text-sm font-semibold mb-2">Timestamp (ISO
+                        8601):</label>
                     <input type="datetime-local" id="timestamp" name="timestamp" required disabled>
                 </div>
                 <button type="submit" class="btn-primary w-full" id="createDonationBtn" disabled>
@@ -214,31 +269,31 @@
         </div>
 
         <!-- View All NFTs Section -->
-        <div class="card">
-            <h2 class="text-2xl font-bold text-indigo-700 mb-4">All NFTs</h2>
-            <button id="refreshNFTsBtn" class="btn-secondary mb-4" disabled>Refresh NFTs</button>
-            <div id="nftsList" class="table-container">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead>
-                        <tr>
-                            <th>NFT ID</th>
-                            <th>Donation ID</th>
-                            <th>Donor ID</th>
-                            <th>Amount</th>
-                            <th>Charity ID</th>
-                            <th>Timestamp</th>
-                            <th>Description</th>
-                            <th>Image</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- NFTs will be loaded here -->
-                    </tbody>
-                </table>
-                <p id="noNFTs" class="text-gray-500 text-center py-4 hidden">No NFTs found.</p>
-            </div>
-        </div>
+        <!-- View All NFTs Section -->
+<div class="card">
+    <h2 class="text-2xl font-bold text-indigo-700 mb-4">All NFTs</h2>
+    <button id="refreshNFTsBtn" class="btn-secondary mb-4" disabled>Refresh NFTs</button>
+    <div id="nftsList" class="table-container">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+                <tr>
+                    <th>NFT ID</th>
+                    <th>Transaction ID</th>
+                    <th>Donation ID</th>
+                    <th>Donor ID</th>
+                    <th>Amount</th>
+                    <th>Charity ID</th>
+                    <th>Timestamp</th>
+                    <th>NFT hash</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- NFTs will be loaded here -->
+            </tbody>
+        </table>
+        <p id="noNFTs" class="text-gray-500 text-center py-4 hidden">No NFTs found.</p>
     </div>
+</div>
 
     <!--
     IMPORTANT: CORS Configuration!
@@ -359,21 +414,27 @@
                     body: JSON.stringify({ donationId, donorId, amount, charityId, timestamp })
                 });
                 const data = await response.json();
-                if (response.ok) {
-                    showMessage(data.message);
-                    document.getElementById('createDonationForm').reset(); // Clear form
-                    // Set default timestamp again after reset
-                    const now = new Date();
-                    const year = now.getFullYear();
-                    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-                    const day = now.getDate().toString().padStart(2, '0');
-                    const hours = now.getHours().toString().padStart(2, '0');
-                    const minutes = now.getMinutes().toString().padStart(2, '0');
-                    document.getElementById('timestamp').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                // In the create donation form submit handler - update the success part
+if (response.ok) {
+    const nftId = data.responseData.nftId || 'Unknown';
+    const transactionId = data.responseData.transactionId || 'Unknown';
+    const uniqueHash = data.responseData.uniqueHash || 'Unknown';
+    
+    showMessage(`Donation created successfully! NFT: ${nftId}, TX: ${transactionId}, Hash: ${uniqueHash}`);
+    document.getElementById('createDonationForm').reset();
+    
+    // Set default timestamp again after reset
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    document.getElementById('timestamp').value = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-                    loadDonations(); // Refresh donations list
-                    loadNFTs(); // Refresh NFTs list
-                } else {
+    loadDonations();
+    loadNFTs();
+} else {
                     // Handle HTTP errors
                     console.error('Backend responded with an error during donation creation:', response.status, response.statusText, data);
                     showMessage(data.error || `Failed to create donation. Status: ${response.status}`, 'error');
@@ -428,59 +489,41 @@
         }
 
         // Load All NFTs
-        async function loadNFTs() {
-            showLoading('Loading NFTs...');
-            const nftsListBody = document.querySelector('#nftsList tbody');
-            nftsListBody.innerHTML = ''; // Clear previous entries
-            document.getElementById('noNFTs').classList.add('hidden');
+        // Load All NFTs - Simplified version
+async function loadNFTs() {
+    showLoading('Loading NFTs...');
+    const nftsListBody = document.querySelector('#nftsList tbody');
+    nftsListBody.innerHTML = ''; // Clear previous entries
+    document.getElementById('noNFTs').classList.add('hidden');
 
-            try {
-                const response = await fetch(`${API_BASE_URL}/nfts`);
-                const data = await response.json();
-                if (response.ok && data.data && data.data.length > 0) {
-                    data.data.forEach(nft => {
-                        const row = nftsListBody.insertRow();
-                        row.insertCell().textContent = nft.nftId;
-                        row.insertCell().textContent = nft.donationId;
-                        row.insertCell().textContent = nft.donorId;
-                        row.insertCell().textContent = nft.amount;
-                        row.insertCell().textContent = nft.charityId;
-                        row.insertCell().textContent = new Date(nft.timestamp).toLocaleString();
-                        row.insertCell().textContent = nft.description || 'N/A';
-                        const imageCell = row.insertCell();
-                        if (nft.image) {
-                            const img = document.createElement('img');
-                            img.src = nft.image;
-                            img.alt = `NFT for ${nft.donationId}`;
-                            img.className = 'w-24 h-auto rounded-md object-cover';
-                            img.onerror = function() {
-                                this.onerror=null; // Prevent infinite loops
-                                this.src='https://placehold.co/96x96/e2e8f0/4a5568?text=No+Image'; // Placeholder if image fails
-                            };
-                            imageCell.appendChild(img);
-                        } else {
-                            imageCell.textContent = 'No Image';
-                        }
-                    });
-                } else {
-                    // Handle cases where response is OK but data is empty or malformed
-                    if (response.ok && (!data.data || data.data.length === 0)) {
-                        document.getElementById('noNFTs').classList.remove('hidden');
-                    } else {
-                        console.error('Backend responded with an error loading NFTs:', response.status, response.statusText, data);
-                        showMessage(data.error || `Failed to load NFTs. Status: ${response.status}`, 'error');
-                        document.getElementById('noNFTs').classList.remove('hidden');
-                    }
-                }
-            } catch (error) {
-                // Handle true network errors
-                console.error('Network error loading NFTs:', error);
-                showMessage('Network error loading NFTs. Is the backend running? Is CORS enabled? Check console for details.', 'error');
-                document.getElementById('noNFTs').classList.remove('hidden');
-            } finally {
-                hideLoading();
-            }
+    try {
+        const response = await fetch(`${API_BASE_URL}/nfts`);
+        const data = await response.json();
+        console.log('NFT API response:', data);
+        
+        if (response.ok && data.data && data.data.length > 0) {
+            data.data.forEach(nft => {
+                const row = nftsListBody.insertRow();
+                row.insertCell().textContent = nft.nftId || 'N/A';
+                row.insertCell().textContent = nft.transactionId || 'N/A';
+                row.insertCell().textContent = nft.donationId || 'N/A';
+                row.insertCell().textContent = nft.donorId || 'N/A';
+                row.insertCell().textContent = nft.amount || 'N/A';
+                row.insertCell().textContent = nft.charityId || 'N/A';
+                row.insertCell().textContent = nft.timestamp ? new Date(nft.timestamp).toLocaleString() : 'N/A';
+                row.insertCell().textContent = nft.uniqueHash || 'N/A';
+            });
+        } else {
+            document.getElementById('noNFTs').classList.remove('hidden');
         }
+    } catch (error) {
+        console.error('Network error loading NFTs:', error);
+        showMessage('Network error loading NFTs', 'error');
+        document.getElementById('noNFTs').classList.remove('hidden');
+    } finally {
+        hideLoading();
+    }
+}
 
         // Event Listeners for Refresh Buttons
         document.getElementById('refreshDonationsBtn').addEventListener('click', loadDonations);
@@ -503,4 +546,5 @@
         };
     </script>
 </body>
+
 </html>

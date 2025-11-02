@@ -142,7 +142,54 @@ class FabricService {
         return this.queryChaincode('getAllDonations', []);
     }
     async getAllNFTs() {
-        return this.queryChaincode('getAllNFTs', []);
+        try {
+            // Try different possible chaincode function names
+            let result;
+            try {
+                result = await this.queryChaincode('getAllNFTs', []);
+            }
+            catch (error) {
+                console.log('getAllNFTs failed, trying GetAllNFTs...');
+                result = await this.queryChaincode('GetAllNFTs', []);
+            }
+            console.log('NFT data from chaincode:', result);
+            if (!result || (Array.isArray(result) && result.length === 0)) {
+                console.log('No NFT data found');
+                return [];
+            }
+            let nfts = Array.isArray(result) ? result : [result];
+            console.log(`Processing ${nfts.length} NFTs`);
+            // Add hash directly to each NFT
+            return nfts.map((nft, index) => {
+                if (!nft || typeof nft !== 'object')
+                    return null;
+                // Create simple hash
+                const nftId = nft.nftId || nft.NFTID || `nft-${index + 1}`;
+                const charityId = nft.charityId || nft.CharityID || 'unknown';
+                const timestamp = nft.timestamp || nft.Timestamp || new Date().toISOString();
+                const data = nftId + charityId + timestamp;
+                let hash = 0;
+                for (let i = 0; i < data.length; i++) {
+                    hash = ((hash << 5) - hash) + data.charCodeAt(i);
+                    hash = hash & hash;
+                }
+                const uniqueHash = 'h' + Math.abs(hash).toString(16).substring(0, 8);
+                return {
+                    nftId: nftId,
+                    transactionId: nft.transactionId || nft.TransactionID || 'N/A',
+                    donationId: nft.donationId || nft.DonationID || 'N/A',
+                    donorId: nft.donorId || nft.DonorID || 'N/A',
+                    amount: nft.amount || nft.Amount || 'N/A',
+                    charityId: charityId,
+                    timestamp: timestamp,
+                    uniqueHash: uniqueHash
+                };
+            }).filter(nft => nft !== null);
+        }
+        catch (error) {
+            console.error('Error getting NFTs:', error);
+            return [];
+        }
     }
 }
 exports.FabricService = FabricService;
